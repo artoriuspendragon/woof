@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Woof · 动物文明箱庭</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="world"></canvas>
+
+      <!-- 顶部：轻量状态条 -->
+      <header id="statusbar">
+        <div class="plank" id="time">第 1 年 · 春</div>
+        <div class="speed" id="speed">
+          <button data-speed="pause" title="暂停 (空格)">❚❚</button>
+          <button data-speed="x1" class="on" title="1×">▶</button>
+          <button data-speed="x2" title="2×">▶▶</button>
+          <button data-speed="x4" title="4×">▶▶▶</button>
+        </div>
+        <div class="cloud" id="evostate">自动演化中</div>
+        <div class="spacer"></div>
+        <button id="newworld" class="ghost" title="换一个世界种子">🎲 新世界</button>
+        <span id="seedlabel" class="seed"></span>
+      </header>
+
+      <!-- 右侧：国家卡片（默认隐藏） -->
+      <aside id="nationcard" class="hidden"></aside>
+
+      <!-- 人物列传面板（默认隐藏） -->
+      <aside id="biopanel" class="hidden"></aside>
+
+      <!-- 底部：编年史 -->
+      <footer id="chronicle">
+        <div id="loglatest" class="latest">世界初成，五国并立……</div>
+        <button id="logtoggle" class="ghost">📖 编年史</button>
+      </footer>
+      <section id="logpanel" class="hidden"></section>
+
+      <!-- 右下：低调神明干预 -->
+      <div id="godbar">
+        <button class="god" data-god="harvest" title="为选中国祝福丰收">🌾 丰收祝福</button>
+        <button class="god" data-god="harmony" title="点选两国促进和谐">🔔 促进和谐</button>
+        <button class="god" data-god="hero" title="为选中国降生英雄">🌠 英雄降生</button>
+      </div>
+
+      <div id="hint">拖拽平移 · 滚轮缩放 · 点击国家查看</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
