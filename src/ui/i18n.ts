@@ -8,10 +8,17 @@ const LS_KEY = 'woof.lang';
 const subs = new Set<() => void>();
 
 let _lang: Lang = (() => {
+  // 1) URL ?lang= 优先（便于分享本地化链接 / 截图 / 端到端测试）
+  try {
+    const p = new URLSearchParams(location.search).get('lang');
+    if (p === 'zh' || p === 'en') return p;
+  } catch { /* SSR or unusual env */ }
+  // 2) localStorage 持久化
   try {
     const s = localStorage.getItem(LS_KEY);
     if (s === 'zh' || s === 'en') return s;
   } catch { /* private mode etc. */ }
+  // 3) 浏览器默认语言
   if (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('zh')) return 'zh';
   return 'en';
 })();
