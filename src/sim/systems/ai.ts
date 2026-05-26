@@ -80,7 +80,7 @@ function expand(world: WorldState, n: Nation, frontier: number[], rng: Rng): voi
     const i = candidates.splice(bi, 1)[0];
     if (world.tiles[i].owner !== null || !TERRAIN[world.tiles[i].terrain].passable) continue;
     world.tiles[i].owner = n.id;
-    world.tiles[i].dev = 12;
+    world.tiles[i].dev = 18;             // 新占地块的起始开发度（让城市有机会在数十年后选址）
     claimed++;
     for (const j of neighbors4(world, i)) {
       const o = world.tiles[j].owner;

@@ -33,7 +33,7 @@ export function cities(world: WorldState, rng: Rng): void {
       let best = -1, bestScore = -1;
       for (let i = 0; i < world.tiles.length; i++) {
         const t = world.tiles[i];
-        if (t.owner !== n.id || t.city > 0 || t.dev < 35) continue;
+        if (t.owner !== n.id || t.city > 0 || t.dev < 25) continue;
         if (!TERRAIN[t.terrain].passable) continue;
         const dn = nearestCityDist(i, allCities, W);
         if (dn < 5) continue;                          // 与"任何"既有城市保持间距(全球)

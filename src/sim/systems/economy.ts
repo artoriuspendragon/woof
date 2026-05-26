@@ -19,6 +19,8 @@ export function economy(world: WorldState, rng: Rng): void {
     if (!t.owner) continue;
     const n = world.nations[t.owner];
     if (!n?.alive) continue;
+    // 被动基建：被本国统治的土地每 tick 缓慢提升开发度（被 AI 主动 develop 之外的常态增长）
+    if (t.dev < 100) t.dev = Math.min(100, t.dev + 0.18);
     const td = TERRAIN[t.terrain];
     const devMul = 0.5 + (t.dev / 100) * 0.5;
     let food = td.yield.food * seasonFoodMul(season);
