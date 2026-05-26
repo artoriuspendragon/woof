@@ -78,7 +78,10 @@ function cityCount(world: WorldState, id: NationId): number {
 }
 
 function armyInfo(world: WorldState, id: NationId): string {
-  let count = 0, size = 0;
-  for (const a of Object.values(world.armies)) if (a.nation === id) { count++; size += a.size; }
-  return count > 0 ? t('card.armies', { count, size: Math.round(size) }) : '';
+  let count = 0, size = 0, minSupply = 100;
+  for (const a of Object.values(world.armies)) if (a.nation === id) {
+    count++; size += a.size; if (a.supply < minSupply) minSupply = a.supply;
+  }
+  if (count === 0) return '';
+  return t('card.armies', { count, size: Math.round(size) }) + (minSupply < 30 ? t('card.armies.lowsupply') : '');
 }

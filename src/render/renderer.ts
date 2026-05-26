@@ -250,17 +250,23 @@ export class Renderer {
       }
 
       const r = Math.max(5, s * 0.42) * (a.size > 150 ? 1.25 : a.size > 60 ? 1.0 : 0.8);
-      // 菱形战旗（区别于圆形城市），底色为国家色
+      const low = a.supply < 30;
+      // 菱形战旗（区别于圆形城市），底色为国家色；缺粮则发灰带警示
       ctx.save();
       ctx.translate(sx, sy); ctx.rotate(Math.PI / 4);
+      ctx.globalAlpha = low ? 0.6 : 1;
       ctx.fillStyle = n.color; ctx.fillRect(-r, -r, r * 2, r * 2);
       ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.strokeRect(-r, -r, r * 2, r * 2);
+      ctx.globalAlpha = 1;
       ctx.restore();
       if (s >= 9) {
-        // 该种族的「披甲出征」形象：动物 + 交叉刀剑徽记
         ctx.font = `${Math.round(r * 1.5)}px serif`;
         ctx.fillText(SPECIES[n.species].emoji, sx, sy);
-        if (s >= 13) { ctx.font = `${Math.round(r * 0.9)}px serif`; ctx.fillText('⚔️', sx + r * 0.85, sy + r * 0.8); }
+        if (s >= 13) {
+          ctx.font = `${Math.round(r * 0.9)}px serif`;
+          // 缺粮显示 💧（断粮），否则显示 ⚔️
+          ctx.fillText(low ? '💧' : '⚔️', sx + r * 0.85, sy + r * 0.8);
+        }
       }
     }
   }

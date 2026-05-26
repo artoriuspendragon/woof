@@ -47,6 +47,24 @@ export function armies(world: WorldState, rng: Rng): void {
     const n = world.nations[army.nation];
     if (!n?.alive) { delete world.armies[army.id]; continue; }
 
+    // 补给：每 tick 沿"本国土地"BFS 找到任一本国城市 → 补满；断线 → 衰减
+    const supplied = canTraceSupply(world, army);
+    army.supply = supplied
+      ? Math.min(100, army.supply + 14)
+      : Math.max(0, army.supply - 9);
+
+    // 缺粮：兵力被消耗（线性，越缺越快）；归零即溃散
+    if (army.supply < 30) {
+      const drain = (30 - army.supply) / 240;
+      army.size *= 1 - drain;
+      if (army.size < 8) {
+        emitLog(world, 'major', `${n.name}的一支军队补给断绝，于荒野中溃散。`, ['war', 'attrition'], n.id, army.tile);
+        addBio(world, army.leaderId, '补给断绝，所部于异国荒野饥渴溃散。');
+        delete world.armies[army.id];
+        continue;
+      }
+    }
+
     // 和平时期：班师回朝，抵达都城即解散，兵力回流后备
     if (n.atWar.length === 0) {
       army.mode = 'home'; army.target = n.capitalTile;
@@ -62,6 +80,14 @@ export function armies(world: WorldState, rng: Rng): void {
     // 败战后撤退：数回合内只顾回援，不寻战、不占地（让胜方乘势推进）
     if (army.retreatUntil && army.retreatUntil > world.tick) {
       army.mode = 'home'; army.target = n.capitalTile;
+      stepToward(world, army, 2);
+      continue;
+    }
+
+    // 补给低 + 无补给线 → 回援最近本国城市，暂不寻战
+    if (army.supply < 25 && !supplied) {
+      const dst = nearestOwnCity(world, army) ?? n.capitalTile;
+      army.mode = 'home'; army.target = dst;
       stepToward(world, army, 2);
       continue;
     }
@@ -93,7 +119,7 @@ function raiseArmy(world: WorldState, n: Nation, enemyId: string, rng: Rng): voi
   n.stats.military -= size;
   const start = ownTileNearestTo(world, n, enemyId);
   const seq = world.armySeq++;
-  const army: Army = { id: `A${seq}`, seq, nation: n.id, leaderId: n.generalId, tile: start, size, target: null, mode: 'march', prevTile: start };
+  const army: Army = { id: `A${seq}`, seq, nation: n.id, leaderId: n.generalId, tile: start, size, target: null, mode: 'march', prevTile: start, supply: 100 };
   world.armies[army.id] = army;
   addBio(world, n.generalId, `统兵 ${size} 出征${world.nations[enemyId].name}。`);
 }
@@ -105,7 +131,7 @@ function splitArmy(world: WorldState, big: Army, leader: Character, focus?: stri
   const seq = world.armySeq++;
   const army: Army = {
     id: `A${seq}`, seq, nation: big.nation, leaderId: leader.id, tile: big.tile,
-    size: det, target: null, mode: 'march', prevTile: big.tile,
+    size: det, target: null, mode: 'march', prevTile: big.tile, supply: big.supply,
     ...(focus ? { focusEnemy: focus } : {}),
   };
   world.armies[army.id] = army;
@@ -216,6 +242,41 @@ function targetEnemyArmy(world: WorldState, army: Army): number | null {
 
 // 先扫荡敌方野地（始终有目标可去），野地占尽再围攻敌城 —— 避免军队呆在城下不动。
 // focus 指定时只针对该敌国（偏师专攻）。
+// 补给线：从军队所在 / 相邻己方土地出发，沿本国领土 BFS，能找到任一己方城市 ⇒ 有补给
+function canTraceSupply(world: WorldState, army: Army): boolean {
+  const self = army.nation;
+  let start = -1;
+  if (world.tiles[army.tile].owner === self) start = army.tile;
+  else {
+    for (const j of neighbors4(world, army.tile)) if (world.tiles[j].owner === self) { start = j; break; }
+  }
+  if (start < 0) return false;
+  const seen = new Set<number>([start]);
+  const q = [start];
+  let head = 0;
+  while (head < q.length && seen.size < 4000) {
+    const i = q[head++];
+    if (world.tiles[i].city > 0) return true;
+    for (const j of neighbors4(world, i)) {
+      if (seen.has(j) || world.tiles[j].owner !== self) continue;
+      seen.add(j); q.push(j);
+    }
+  }
+  return false;
+}
+
+function nearestOwnCity(world: WorldState, army: Army): number | null {
+  const self = army.nation;
+  const W = world.width, ax = army.tile % W, ay = (army.tile / W) | 0;
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < world.tiles.length; i++) {
+    if (world.tiles[i].owner !== self || world.tiles[i].city === 0) continue;
+    const d = Math.abs((i % W) - ax) + Math.abs(((i / W) | 0) - ay);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best >= 0 ? best : null;
+}
+
 function nearestEnemyTile(world: WorldState, army: Army, focus?: string): number | null {
   const enemies = world.nations[army.nation].atWar;
   if (enemies.length === 0) return null;
@@ -266,7 +327,9 @@ function combatPowerArmy(world: WorldState, army: Army, rng: Rng): number {
   const lead = leader?.alive ? 0.85 + leader.ability / 250 : 0.8;
   const spc = SPECIES[n.species].mvp.military;
   const badger = n.species === 'badger' && s.morale < 45 ? 1.15 : 1;
-  return Math.pow(Math.max(0, army.size), 0.9) * supply * order * will * lead * spc * badger * (0.8 + rng.next() * 0.4);
+  // 本军自身的补给状态：0 → 战力 0.55，100 → 1.0
+  const fieldSupply = 0.55 + 0.45 * army.supply / 100;
+  return Math.pow(Math.max(0, army.size), 0.9) * supply * order * will * lead * spc * badger * fieldSupply * (0.8 + rng.next() * 0.4);
 }
 
 function fieldBattle(world: WorldState, A: Army, B: Army, rng: Rng): void {
@@ -323,18 +386,27 @@ function captureAround(world: WorldState, army: Army, rng: Rng): void {
     const enemy = world.nations[o];
 
     if (t.city > 0) {
-      // 城市是堡垒：围城逐渐消耗守军(攻城战)，须以绝对优势才能强攻得手
-      enemy.stats.military = Math.max(0, enemy.stats.military - 4);   // 围城损耗
+      // 围城损耗：守军和士气持续被消耗
+      enemy.stats.military = Math.max(0, enemy.stats.military - 4);
       enemy.stats.morale = clamp(enemy.stats.morale - 0.6, 0, 100);
-      const need = totalStrength(world, o) * (0.8 + t.city * 0.45);
-      if (army.size > need && rng.chance(0.4)) {
-        const wasCapital = i === enemy.capitalTile;
+
+      // 攻陷阈值：城防主要看城池等级（守军规模），加少量国力修正。
+      // 这样守方还在打野战时也能强攻得手，但都城仍不易陷落。
+      const isCap = i === enemy.capitalTile;
+      let need = (isCap ? 90 : 35 * t.city) + totalStrength(world, o) * 0.18;
+      const hasField = Object.values(world.armies).some((a) => a.nation === o);
+      if (!hasField) need *= 0.5;     // 野战军覆灭后,都城形同虚设
+      need = Math.max(20, need);
+
+      if (army.size > need && rng.chance(0.5)) {
         t.owner = n.id; t.city = Math.max(1, t.city - 1); t.dev = Math.max(6, t.dev - 12);
         enemy.stats.military *= 0.9;
         pushGrudge(enemy, n.id, world.tick); claimed++;
-        emitLog(world, 'major', `${n.name}的大军历经苦战，攻陷了${enemy.name}的一座城池！`, ['war', 'siege'], n.id, i);
-        addBio(world, army.leaderId, `督军破城，攻克${enemy.name}城池。`);
-        if (wasCapital) { annex(world, n, enemy); return; }
+        emitLog(world, 'major',
+          isCap ? `${n.name}的大军攻陷了${enemy.name}的都城！` : `${n.name}的大军历经苦战，攻陷了${enemy.name}的一座城池！`,
+          ['war', 'siege'], n.id, i);
+        addBio(world, army.leaderId, isCap ? `亲率大军攻陷${enemy.name}国都！` : `督军破城，攻克${enemy.name}城池。`);
+        if (isCap) { annex(world, n, enemy); return; }
       }
       continue;   // 城市阻断蔓延
     }

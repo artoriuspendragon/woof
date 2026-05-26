@@ -90,6 +90,7 @@ export interface Army {
   prevTile: number;        // 上一位置（渲染行军动画用）
   retreatUntil?: number;   // 败战后撤退到该 tick 前不再寻战
   focusEnemy?: NationId;   // 偏师专攻的敌国（多线作战时分配）
+  supply: number;          // 补给 0..100：需经本国城市补给线维持，断线即衰亡
 }
 
 export interface Nation {
