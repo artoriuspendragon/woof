@@ -1,6 +1,6 @@
 import './ui/styles.css';
 import type { WorldState, NationId, CharId, LogEntry } from './sim/types';
-import { yearOf, seasonOf, SEASON_CN } from './sim/types';
+import { yearOf, seasonOf } from './sim/types';
 import { createWorld } from './sim/world';
 import { tick } from './sim/tick';
 import { Renderer, type FxKind } from './render/renderer';
@@ -8,6 +8,7 @@ import { renderNationCard } from './ui/nationCard';
 import { renderLatest, renderLogPanel, type LogPanelOpts } from './ui/eventLog';
 import { renderBioPanel } from './ui/bioPanel';
 import { harvestBless, harmonyBless, heroBorn } from './sim/interventions';
+import { t, getLang, setLang, onLangChange, nationName } from './ui/i18n';
 
 type Speed = 'pause' | 'x1' | 'x2' | 'x4';
 const SIM_HZ: Record<Speed, number> = { pause: 0, x1: 2, x2: 4, x4: 8 };
@@ -15,7 +16,7 @@ const SIM_HZ: Record<Speed, number> = { pause: 0, x1: 2, x2: 4, x4: 8 };
 const canvas = document.getElementById('world') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 
-// URL 参数：?seed=123 复现世界；?prerun=300 预跑若干 tick（便于复现/截图）
+// URL params: ?seed= reproduce world; ?prerun=N fast-forward; ?focus=, ?bio=1, ?zoom=N
 const params = new URLSearchParams(location.search);
 const seedParam = params.get('seed');
 let world: WorldState = createWorld(seedParam !== null ? Number(seedParam) | 0 : (Math.random() * 1e9) | 0);
@@ -25,8 +26,8 @@ let speed: Speed = 'x1';
 let selected: NationId | null = null;
 let logOpen = false;
 let logFilter: NationId | null = null;
-let showDetail = false;            // 编年史是否显示细节（默认否）
-let bioOpen: CharId | null = null; // 当前打开列传的人物
+let showDetail = false;
+let bioOpen: CharId | null = null;
 let godMode: 'harvest' | 'harmony' | 'hero' | null = null;
 let harmonyFirst: NationId | null = null;
 let lastLogId = 0;
@@ -41,8 +42,9 @@ const cardEl = $<HTMLElement>('nationcard');
 const bioEl = $<HTMLElement>('biopanel');
 const latestEl = $('loglatest'), panelEl = $<HTMLElement>('logpanel');
 const hintEl = $('hint');
-
-seedEl.textContent = `种子 ${world.seed}`;
+const langBtn = $('langtoggle');
+const newWorldBtn = $<HTMLButtonElement>('newworld');
+const logBtn = $<HTMLButtonElement>('logtoggle');
 
 // ---------- 世界控制 ----------
 function newWorld(): void {
@@ -51,7 +53,7 @@ function newWorld(): void {
   renderer.setWorld(world);
   cardEl.classList.add('hidden');
   bioEl.classList.add('hidden');
-  seedEl.textContent = `种子 ${world.seed}`;
+  applyStaticI18n();
   refreshHud();
 }
 
@@ -59,12 +61,36 @@ function setSpeed(s: Speed): void {
   speed = s;
   document.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) =>
     b.classList.toggle('on', b.dataset.speed === s));
-  evoEl.textContent = s === 'pause' ? '已暂停' : '自动演化中';
+  evoEl.textContent = t(s === 'pause' ? 'evo.paused' : 'evo.running');
+}
+
+// ---------- 国际化：把静态 HTML 上的中文/英文也按当前语言更新一遍 ----------
+function applyStaticI18n(): void {
+  document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en';
+  document.title = t('app.tab');
+  seedEl.textContent = t('seed', { n: world.seed });
+  langBtn.textContent = getLang() === 'zh' ? t('lang.label.zh') + ' / EN' : '中 / ' + t('lang.label.en');
+  langBtn.title = t('lang.toggle.title');
+  newWorldBtn.title = t('newworld.title');
+  // 新世界按钮保留 emoji-only label（节省顶栏空间），换语言时不变
+  logBtn.textContent = t('log.btn');
+  const speedBtns = document.querySelectorAll<HTMLButtonElement>('#speed button');
+  speedBtns.forEach((b) => { const k = b.dataset.speed; if (k) b.title = t(`speed.${k}.title`); });
+  $('hint').textContent = t('hint.normal');
+  const gods: Array<['harvest' | 'harmony' | 'hero']> = [['harvest'], ['harmony'], ['hero']];
+  for (const [k] of gods) {
+    const el = document.querySelector<HTMLButtonElement>(`#godbar [data-god="${k}"]`);
+    if (el) { el.textContent = t(`god.${k}.label`); el.title = t(`god.${k}.title`); }
+  }
+  // evostate 跟随当前 speed
+  evoEl.textContent = t(speed === 'pause' ? 'evo.paused' : 'evo.running');
+  // latest 初始占位（若日志为空才显示）
+  if (world.log.length === 0) latestEl.textContent = t('log.latest.placeholder');
 }
 
 // ---------- HUD 刷新 ----------
 function refreshHud(): void {
-  timeEl.textContent = `第 ${yearOf(world.tick)} 年 · ${SEASON_CN[seasonOf(world.tick)]}`;
+  timeEl.textContent = t('time', { year: yearOf(world.tick), season: t(`season.${seasonOf(world.tick)}`) });
   renderLatest(world, latestEl, showDetail);
   if (selected) renderNationCard(world, selected, cardEl, openStory, openBio);
   if (logOpen) renderLogPanel(world, panelEl, logPanelOpts());
@@ -127,7 +153,7 @@ function fxForLog(e: LogEntry): FxKind | null {
   return null;
 }
 
-// ---------- 主循环（固定步长 + 渲染解耦，docs/02 §3） ----------
+// ---------- 主循环（固定步长 + 渲染解耦） ----------
 let acc = 0, last = performance.now();
 function frame(now: number): void {
   const dt = (now - last) / 1000; last = now;
@@ -145,7 +171,7 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
-// ---------- 输入：平移 / 缩放 / 选择 / 干预 ----------
+// ---------- 输入 ----------
 let dragging = false, moved = false, lx = 0, ly = 0;
 canvas.addEventListener('pointerdown', (e) => { dragging = true; moved = false; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointermove', (e) => {
@@ -161,9 +187,7 @@ canvas.addEventListener('pointerup', (e) => {
   const tileIdx = renderer.tileAt(e.clientX - rect.left, e.clientY - rect.top);
   if (tileIdx === null) return;
   const owner = world.tiles[tileIdx].owner;
-
   if (godMode) { applyGod(owner); return; }
-
   if (owner && world.nations[owner]?.alive) { selected = owner; refreshHud(); }
   else { selected = null; cardEl.classList.add('hidden'); }
 });
@@ -181,8 +205,8 @@ function armGod(mode: 'harvest' | 'harmony' | 'hero'): void {
   harmonyFirst = null;
   document.querySelectorAll<HTMLButtonElement>('#godbar .god').forEach((b) =>
     b.classList.toggle('armed', !!godMode && b.dataset.god === godMode));
-  hintEl.textContent = godMode === 'harmony' ? '点选第一个国家……'
-    : godMode ? '点选要施法的国家' : '拖拽平移 · 滚轮缩放 · 点击国家查看';
+  hintEl.textContent = godMode === 'harmony' ? t('hint.god.harmony1')
+    : godMode ? t('hint.god.cast') : t('hint.normal');
   hintEl.style.opacity = '1';
 }
 
@@ -194,7 +218,7 @@ function applyGod(owner: NationId | null): void {
   else if (godMode === 'harmony') {
     if (!harmonyFirst) {
       harmonyFirst = owner;
-      hintEl.textContent = `已选 ${world.nations[owner].name}，再点选另一国……`;
+      hintEl.textContent = t('hint.god.harmony2', { name: nationName(world.nations[owner].species) });
       return;
     }
     tile = harmonyBless(world, harmonyFirst, owner);
@@ -210,12 +234,15 @@ document.querySelectorAll<HTMLButtonElement>('#godbar .god').forEach((b) =>
 // ---------- 顶部 / 底部按钮 ----------
 document.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) =>
   b.addEventListener('click', () => setSpeed(b.dataset.speed as Speed)));
-$('newworld').addEventListener('click', newWorld);
-$('logtoggle').addEventListener('click', () => {
+newWorldBtn.addEventListener('click', newWorld);
+logBtn.addEventListener('click', () => {
   logOpen = !logOpen;
   panelEl.classList.toggle('hidden', !logOpen);
   if (logOpen) renderLogPanel(world, panelEl, logPanelOpts());
 });
+langBtn.addEventListener('click', () => setLang(getLang() === 'zh' ? 'en' : 'zh'));
+onLangChange(() => { applyStaticI18n(); refreshHud(); });
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); setSpeed(speed === 'pause' ? 'x1' : 'pause'); }
   else if (e.code === 'Digit1') setSpeed('x1');
@@ -224,10 +251,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 setSpeed('x1');
+applyStaticI18n();
 refreshHud();
 setTimeout(() => { hintEl.style.opacity = '0'; }, 6000);
 
-// 调试便利：?focus=dog_1 选中某国；附带 ?bio=1 展开其国王列传，否则展开编年史
+// 调试便利
 const focus = params.get('focus');
 if (focus && world.nations[focus]?.alive) {
   selected = focus;

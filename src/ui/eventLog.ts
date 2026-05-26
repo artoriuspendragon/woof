@@ -1,8 +1,8 @@
 import type { WorldState, NationId, LogEntry } from '../sim/types';
-import { yearOf, seasonOf, SEASON_CN } from '../sim/types';
+import { yearOf, seasonOf } from '../sim/types';
 import { LEVEL_ICON } from './format';
+import { t, nationName } from './i18n';
 
-// “必要”历史 = 大事件 + 史诗（不勾选细节时只看这些）
 export function isImportant(e: LogEntry): boolean {
   return e.level === 'major' || e.level === 'epic';
 }
@@ -27,7 +27,9 @@ export interface LogPanelOpts {
 
 export function renderLogPanel(world: WorldState, el: HTMLElement, opts: LogPanelOpts): void {
   const { filter, detail } = opts;
-  const title = filter && world.nations[filter] ? `编年史 · ${world.nations[filter].name}` : '编年史';
+  const title = filter && world.nations[filter]
+    ? t('log.title.with', { name: nationName(world.nations[filter].species) })
+    : t('log.title');
   const entries = world.log
     .filter((e) => (!filter || e.nation === filter) && (detail || isImportant(e)))
     .slice(-200).reverse();
@@ -35,15 +37,15 @@ export function renderLogPanel(world: WorldState, el: HTMLElement, opts: LogPane
   el.innerHTML = `
     <div class="logbar">
       <strong>${title}</strong>
-      <label class="detail"><input type="checkbox" id="detailbox" ${detail ? 'checked' : ''}/> 显示细节</label>
+      <label class="detail"><input type="checkbox" id="detailbox" ${detail ? 'checked' : ''}/> ${t('log.detail')}</label>
       <div class="filters" id="logfilters"></div>
     </div>
     <div class="loglist">
-      ${entries.length === 0 ? '<div class="empty">暂无大事记。勾选“显示细节”查看全部。</div>' : entries.map((e) => {
+      ${entries.length === 0 ? `<div class="empty">${t('log.empty')}</div>` : entries.map((e) => {
         const dot = e.nation && world.nations[e.nation]
           ? `<span class="ndot" style="background:${world.nations[e.nation].color}"></span>` : '';
         return `<div class="logrow ${e.level}" data-tile="${e.tile ?? ''}" data-nation="${e.nation ?? ''}">
-          <span class="when">第${yearOf(e.tick)}年${SEASON_CN[seasonOf(e.tick)]}</span>
+          <span class="when">${t('time', { year: yearOf(e.tick), season: t(`season.${seasonOf(e.tick)}`) })}</span>
           <span class="lv ${e.level}">${LEVEL_ICON[e.level]}</span>${dot}
           <span class="txt">${e.text}</span></div>`;
       }).join('')}
@@ -60,10 +62,10 @@ export function renderLogPanel(world: WorldState, el: HTMLElement, opts: LogPane
     b.onclick = () => opts.onFilter(id);
     return b;
   };
-  fbar.appendChild(mkBtn('全部', null));
+  fbar.appendChild(mkBtn(t('log.all'), null));
   for (const n of Object.values(world.nations)) {
     if (!n.alive) continue;
-    fbar.appendChild(mkBtn(n.name, n.id));
+    fbar.appendChild(mkBtn(nationName(n.species), n.id));
   }
 
   el.querySelectorAll<HTMLElement>('.logrow').forEach((row) => {
