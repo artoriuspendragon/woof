@@ -102,7 +102,13 @@ function logPanelOpts(): LogPanelOpts {
     filter: logFilter,
     detail: showDetail,
     onPick: onPickLog,
-    onFilter: (id) => { logFilter = id; renderLogPanel(world, panelEl, logPanelOpts()); },
+    // 点筛选标签:同时把该国设为选中(活国 → 正常卡;亡国 → 怀念碑)
+    onFilter: (id) => {
+      logFilter = id;
+      if (id !== null && world.nations[id]) { selected = id; }
+      renderLogPanel(world, panelEl, logPanelOpts());
+      refreshHud();
+    },
     onToggleDetail: (v) => { showDetail = v; refreshHud(); },
   };
 }
@@ -124,7 +130,8 @@ function closeBio(): void {
 
 function onPickLog(tile: number | undefined, nation?: NationId): void {
   if (tile !== undefined) centerOnTile(tile);
-  if (nation && world.nations[nation]?.alive) { selected = nation; refreshHud(); }
+  // 允许选中亡国 → 展示其怀念碑
+  if (nation && world.nations[nation]) { selected = nation; refreshHud(); }
 }
 
 function centerOnTile(tile: number): void {

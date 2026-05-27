@@ -110,6 +110,8 @@ export interface Nation {
   atWar: NationId[];        // 当前交战对象
   alive: boolean;
   fortify: number;          // 全国防御加成（fortify 行动累积）
+  fellTick?: number;        // 灭亡 tick（覆灭后保留于史册）
+  fellTo?: NationId;        // 被谁吞并（饥荒/内崩为 undefined）
 }
 
 export type LogLevel = 'minor' | 'medium' | 'major' | 'epic';

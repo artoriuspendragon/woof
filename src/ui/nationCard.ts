@@ -1,4 +1,5 @@
 import type { WorldState, NationId, CharId } from '../sim/types';
+import { yearOf } from '../sim/types';
 import { SPECIES } from '../data/species';
 import { notablePeople } from '../sim/people';
 import { moodText, relationWord, norm, qualitative, ROLE_ICON, roleLabel, personalityLabel } from './format';
@@ -15,7 +16,8 @@ export function renderNationCard(
   onStory: (id: NationId) => void, onPerson: (id: CharId) => void,
 ): void {
   const n = world.nations[id];
-  if (!n || !n.alive) { el.classList.add('hidden'); return; }
+  if (!n) { el.classList.add('hidden'); return; }
+  if (!n.alive) { renderMemorialCard(world, id, el, onStory, onPerson); return; }
   const def = SPECIES[n.species];
   const ruler = world.characters[n.rulerId];
   const s = n.stats;
@@ -64,7 +66,7 @@ export function renderNationCard(
     <div class="terr">${t('card.territory', { t: n.territory, c: cityCount(world, n.id) })}${armyInfo(world, n.id)}</div>
     <button class="locate ghost">${t('card.story_btn')}</button>
   `;
-  el.classList.remove('hidden');
+  el.classList.remove('hidden', 'memorial');
   el.querySelector<HTMLButtonElement>('.locate')!.onclick = () => onStory(n.id);
   el.querySelectorAll<HTMLElement>('.person').forEach((p) => {
     p.onclick = () => onPerson(p.dataset.cid!);
@@ -84,4 +86,51 @@ function armyInfo(world: WorldState, id: NationId): string {
   }
   if (count === 0) return '';
   return t('card.armies', { count, size: Math.round(size) }) + (minSupply < 30 ? t('card.armies.lowsupply') : '');
+}
+
+// 怀念碑：亡国保留于史册，独立样式（褪色羊皮 + 蜡烛印记）。
+function renderMemorialCard(
+  world: WorldState, id: NationId, el: HTMLElement,
+  onStory: (id: NationId) => void, onPerson: (id: CharId) => void,
+): void {
+  const n = world.nations[id];
+  if (!n) { el.classList.add('hidden'); return; }
+  const def = SPECIES[n.species];
+
+  const fellYear = yearOf(n.fellTick ?? 0);
+  const conq = n.fellTo ? world.nations[n.fellTo] : null;
+  const fate = conq
+    ? t('card.memorial.fell', { year: fellYear }) + t('card.memorial.absorbedBy', { by: nationName(conq.species) })
+    : t('card.memorial.fell', { year: fellYear }) + t('card.memorial.collapsed');
+
+  // 历代人物：含已故，按陨落顺序（先王在前，最近殁者次之；同顺序内按声望）
+  const figures = Object.values(world.characters)
+    .filter((c) => c.nation === id)
+    .sort((a, b) => {
+      const rank = (r: string) => r === 'king' ? 0 : r === 'general' ? 1 : 2;
+      if (rank(a.role) !== rank(b.role)) return rank(a.role) - rank(b.role);
+      return (b.deathTick ?? Infinity) - (a.deathTick ?? Infinity);
+    })
+    .slice(0, 12);
+
+  const peopleHtml = figures.map((c) =>
+    `<button class="person fallen-person" data-cid="${c.id}" title="${roleLabel(c.role)}">${ROLE_ICON[c.role]} ${c.name}<small>${roleLabel(c.role)}</small></button>`,
+  ).join('') || `<span class="empty">${t('card.memorial.no_figures')}</span>`;
+
+  el.innerHTML = `
+    <div class="card-head" style="border-color:${n.color}">
+      <span class="flag">${def.emoji}</span>
+      <div><div class="nname">${nationName(n.species)} <span class="fallen-tag">${t('card.memorial.tag')}</span></div>
+      <div class="sub">${fate}</div></div>
+    </div>
+    <div class="reltitle">${t('card.memorial.figures')}</div>
+    <div class="people">${peopleHtml}</div>
+    <button class="locate ghost">${t('card.memorial.story_btn')}</button>
+  `;
+  el.classList.add('memorial');
+  el.classList.remove('hidden');
+  el.querySelector<HTMLButtonElement>('.locate')!.onclick = () => onStory(n.id);
+  el.querySelectorAll<HTMLElement>('.person').forEach((p) => {
+    p.onclick = () => onPerson(p.dataset.cid!);
+  });
 }

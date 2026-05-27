@@ -87,6 +87,7 @@ export function killNation(world: WorldState, id: string, reason: string): void 
   const n = world.nations[id];
   if (!n || !n.alive) return;
   n.alive = false;
+  n.fellTick = world.tick;
   for (let i = 0; i < world.tiles.length; i++) if (world.tiles[i].owner === id) world.tiles[i].owner = null;
   for (const other of Object.values(world.nations)) {
     other.atWar = other.atWar.filter((x) => x !== id);

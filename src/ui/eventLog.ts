@@ -55,18 +55,20 @@ export function renderLogPanel(world: WorldState, el: HTMLElement, opts: LogPane
     opts.onToggleDetail((ev.target as HTMLInputElement).checked);
 
   const fbar = el.querySelector<HTMLElement>('#logfilters')!;
-  const mkBtn = (label: string, id: NationId | null) => {
+  const mkBtn = (label: string, id: NationId | null, fallen = false) => {
     const b = document.createElement('button');
-    b.className = 'ghost mini' + (filter === id ? ' on' : '');
+    b.className = 'ghost mini' + (filter === id ? ' on' : '') + (fallen ? ' fallen' : '');
     b.textContent = label;
     b.onclick = () => opts.onFilter(id);
     return b;
   };
   fbar.appendChild(mkBtn(t('log.all'), null));
-  for (const n of Object.values(world.nations)) {
-    if (!n.alive) continue;
-    fbar.appendChild(mkBtn(nationName(n.species), n.id));
-  }
+  // 活国在前；亡国按陨落顺序排在后,用淡化样式区分
+  const ns = Object.values(world.nations);
+  const living = ns.filter((n) => n.alive);
+  const fallen = ns.filter((n) => !n.alive).sort((a, b) => (b.fellTick ?? 0) - (a.fellTick ?? 0));
+  for (const n of living) fbar.appendChild(mkBtn(nationName(n.species), n.id, false));
+  for (const n of fallen) fbar.appendChild(mkBtn(nationName(n.species), n.id, true));
 
   el.querySelectorAll<HTMLElement>('.logrow').forEach((row) => {
     row.onclick = () => opts.onPick(row.dataset.tile ? Number(row.dataset.tile) : undefined, row.dataset.nation || undefined);

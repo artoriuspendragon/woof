@@ -1,4 +1,4 @@
-import type { WorldState, Nation, Army, Character } from '../types';
+import type { WorldState, Nation, Army, Character, NationId } from '../types';
 import { neighbors4, emitLog } from '../world';
 import { TERRAIN } from '../../data/terrain';
 import { SPECIES } from '../../data/species';
@@ -411,6 +411,16 @@ function captureAround(world: WorldState, army: Army, rng: Rng): void {
       continue;   // 城市阻断蔓延
     }
 
+    // 城防辐射：与敌方城市曼哈顿距离 ≤ 2 的腹地受庇护，不可被占领，必须先攻陷该城
+    if (isProtectedByEnemyCity(world, i, o)) {
+      // 庇护内的地块仍参与 BFS 蔓延（让远端非庇护地块也能被处理）
+      for (const j of neighbors4(world, i)) {
+        if (seen.has(j)) continue;
+        if (isEnemyTile(world, j, n)) { seen.add(j); q.push(j); }
+      }
+      continue;
+    }
+
     // 普通敌地：占领并向相邻敌地继续蔓延（前线自然推进）
     t.owner = n.id; t.dev = Math.max(6, t.dev - 8);
     enemy.stats.military = Math.max(0, enemy.stats.military - 2);
@@ -427,12 +437,32 @@ function isEnemyTile(world: WorldState, i: number, n: Nation): boolean {
   return !!o && n.atWar.includes(o);
 }
 
+// 受敌方城市庇护：在曼哈顿半径 2 内存在同主之城（须先攻陷该城,腹地方可被占领）
+function isProtectedByEnemyCity(world: WorldState, tile: number, ownerId: NationId): boolean {
+  const W = world.width, H = world.height;
+  const tx = tile % W, ty = (tile / W) | 0;
+  for (let dy = -2; dy <= 2; dy++) {
+    const ny = ty + dy;
+    if (ny < 0 || ny >= H) continue;
+    const rem = 2 - Math.abs(dy);
+    for (let dx = -rem; dx <= rem; dx++) {
+      const nx = tx + dx;
+      if (nx < 0 || nx >= W) continue;
+      const j = ny * W + nx;
+      if (world.tiles[j].city > 0 && world.tiles[j].owner === ownerId) return true;
+    }
+  }
+  return false;
+}
+
 // ---------- 吞并 ----------
 export function annex(world: WorldState, winner: Nation, loser: Nation): void {
   for (let i = 0; i < world.tiles.length; i++) {
     if (world.tiles[i].owner === loser.id) { world.tiles[i].owner = winner.id; world.tiles[i].dev = Math.max(6, world.tiles[i].dev - 10); }
   }
   loser.alive = false;
+  loser.fellTick = world.tick;
+  loser.fellTo = winner.id;
   for (const m of Object.values(world.nations)) m.atWar = m.atWar.filter((x) => x !== loser.id);
   for (const id of Object.keys(world.armies)) if (world.armies[id].nation === loser.id) delete world.armies[id]; // 残军溃散
   winner.stats.prestige = clamp(winner.stats.prestige + 12, 0, 100);
