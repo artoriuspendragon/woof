@@ -103,6 +103,12 @@ function renderMemorialCard(
     ? t('card.memorial.fell', { year: fellYear }) + t('card.memorial.absorbedBy', { by: nationName(conq.species) })
     : t('card.memorial.fell', { year: fellYear }) + t('card.memorial.collapsed');
 
+  // 该国谢幕时的史官原话（吞并 / 饥荒之 'fall' tag 日志）→ 卡片上直接读到死因
+  const fallLog = [...world.log].reverse().find((e) =>
+    e.tags.includes('fall') && (e.nation === id || e.otherNations?.includes(id)),
+  );
+  const obituaryHtml = fallLog ? `<blockquote class="obituary">${fallLog.text}</blockquote>` : '';
+
   // 历代人物：含已故，按陨落顺序（先王在前，最近殁者次之；同顺序内按声望）
   const figures = Object.values(world.characters)
     .filter((c) => c.nation === id)
@@ -123,6 +129,7 @@ function renderMemorialCard(
       <div><div class="nname">${nationName(n.species)} <span class="fallen-tag">${t('card.memorial.tag')}</span></div>
       <div class="sub">${fate}</div></div>
     </div>
+    ${obituaryHtml}
     <div class="reltitle">${t('card.memorial.figures')}</div>
     <div class="people">${peopleHtml}</div>
     <button class="locate ghost">${t('card.memorial.story_btn')}</button>

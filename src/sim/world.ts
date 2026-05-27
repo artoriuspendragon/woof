@@ -52,8 +52,13 @@ export function neighbors4(w: WorldState, i: number): number[] {
   return out;
 }
 
-export function emitLog(w: WorldState, level: LogLevel, text: string, tags: string[], nation?: NationId, tile?: number): void {
-  w.log.push({ id: w.logSeq++, tick: w.tick, level, text, tags, ...(nation ? { nation } : {}), ...(tile !== undefined ? { tile } : {}) });
+export function emitLog(w: WorldState, level: LogLevel, text: string, tags: string[], nation?: NationId, tile?: number, otherNations?: NationId[]): void {
+  w.log.push({
+    id: w.logSeq++, tick: w.tick, level, text, tags,
+    ...(nation ? { nation } : {}),
+    ...(tile !== undefined ? { tile } : {}),
+    ...(otherNations && otherNations.length ? { otherNations } : {}),
+  });
   if (w.log.length > 600) w.log.splice(0, w.log.length - 600); // 防无限增长
 }
 

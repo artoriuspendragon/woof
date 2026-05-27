@@ -443,6 +443,35 @@ button {
   border-color: var(--paper-deep);
 }
 
+/* The "obituary" — the chronicler's own words on how this kingdom ended.
+   Pulled from the actual 'fall' log entry so the in-world story stays
+   the source of truth. */
+#nationcard.memorial .obituary {
+  margin: 12px 0 8px;
+  padding: 10px 14px 10px 16px;
+  background: rgba(251, 243, 220, 0.7);
+  border-left: 2px solid var(--wax);
+  border-radius: 0 var(--r) var(--r) 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+  position: relative;
+}
+#nationcard.memorial .obituary::before {
+  content: "“";
+  position: absolute;
+  left: 6px; top: -4px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
+  color: var(--wax);
+  opacity: 0.42;
+  font-style: normal;
+}
+
 /* ─────────────────────────────────────────────────────────────
  * Biography panel (sits left of nation card)
  * ───────────────────────────────────────────────────────────── */

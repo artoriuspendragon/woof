@@ -120,7 +120,8 @@ export interface LogEntry {
   tick: number;
   level: LogLevel;
   text: string;
-  nation?: NationId;
+  nation?: NationId;        // 主关联国（卡片上方按这个分类）
+  otherNations?: NationId[]; // 其他被卷入的国家（供编年史按国筛选时也能命中）
   tile?: number;            // 事发地（供镜头定位 / 标记）
   tags: string[];
 }

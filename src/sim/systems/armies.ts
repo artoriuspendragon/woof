@@ -138,7 +138,7 @@ function splitArmy(world: WorldState, big: Army, leader: Character, focus?: stri
   addBio(world, leader.id, '自主力分兵，独领偏师另开战线。');
   const who = leader.role === 'hero' ? `英雄${leader.name}` : `偏将${leader.name}`;
   const where = focus ? `转攻${world.nations[focus]?.name ?? '他国'}` : '转战他线';
-  emitLog(world, 'major', `${world.nations[big.nation].name}兵分两路，${who}另领一军，${where}。`, ['war', 'split'], big.nation, big.tile);
+  emitLog(world, 'major', `${world.nations[big.nation].name}兵分两路，${who}另领一军，${where}。`, ['war', 'split'], big.nation, big.tile, focus ? [focus] : undefined);
 }
 
 // 是否值得另开一路：多线作战，或敌方有远离主力(>10格)的领土
@@ -343,7 +343,7 @@ function fieldBattle(world: WorldState, A: Army, B: Army, rng: Rng): void {
   ln.stats.morale = clamp(ln.stats.morale - 3, 0, 100);
   wn.stats.morale = clamp(wn.stats.morale + 1, 0, 100);
   wn.stats.prestige = clamp(wn.stats.prestige + 1, 0, 100);
-  if (rng.chance(0.25)) emitLog(world, 'medium', `${wn.name}的大军在沙场上击退了${ln.name}的军队。`, ['war', 'battle'], win.nation, win.tile);
+  if (rng.chance(0.25)) emitLog(world, 'medium', `${wn.name}的大军在沙场上击退了${ln.name}的军队。`, ['war', 'battle'], win.nation, win.tile, [lose.nation]);
   const wl = world.characters[win.leaderId];
   if (wl?.alive && rng.chance(0.3)) addBio(world, wl.id, `沙场鏖战，击退${ln.name}之师。`);
   if (lose.size < 12) destroyArmy(world, lose, rng);
@@ -404,7 +404,7 @@ function captureAround(world: WorldState, army: Army, rng: Rng): void {
         pushGrudge(enemy, n.id, world.tick); claimed++;
         emitLog(world, 'major',
           isCap ? `${n.name}的大军攻陷了${enemy.name}的都城！` : `${n.name}的大军历经苦战，攻陷了${enemy.name}的一座城池！`,
-          ['war', 'siege'], n.id, i);
+          ['war', 'siege'], n.id, i, [o]);
         addBio(world, army.leaderId, isCap ? `亲率大军攻陷${enemy.name}国都！` : `督军破城，攻克${enemy.name}城池。`);
         if (isCap) { annex(world, n, enemy); return; }
       }
@@ -478,5 +478,5 @@ export function annex(world: WorldState, winner: Nation, loser: Nation): void {
     const c = world.characters[id];
     if (c?.alive) { c.alive = false; c.deathTick = world.tick; addBio(world, id, `${loser.name}亡国，随社稷一同殒落。`); }
   }
-  emitLog(world, 'epic', `${winner.name}吞并了${loser.name}！${loser.name}的旗帜落下，疆域并入${winner.name}。`, ['epic', 'war', 'fall'], winner.id, loser.capitalTile);
+  emitLog(world, 'epic', `${winner.name}吞并了${loser.name}！${loser.name}的旗帜落下，疆域并入${winner.name}。`, ['epic', 'war', 'fall'], winner.id, loser.capitalTile, [loser.id]);
 }

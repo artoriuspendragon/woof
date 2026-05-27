@@ -75,7 +75,7 @@ function startWar(world: WorldState, a: Nation, b: Nation, rng: Rng): void {
   a.relations[b.id].treaties = a.relations[b.id].treaties.filter((t) => t !== 'trade' && t !== 'alliance');
   b.relations[a.id].treaties = b.relations[a.id].treaties.filter((t) => t !== 'trade' && t !== 'alliance');
   const cb = casusBelli(a, b, rng);
-  emitLog(world, 'major', `${a.name}以「${cb}」为由向${b.name}宣战，边境战云密布。`, ['war', 'declare'], a.id, b.capitalTile);
+  emitLog(world, 'major', `${a.name}以「${cb}」为由向${b.name}宣战，边境战云密布。`, ['war', 'declare'], a.id, b.capitalTile, [b.id]);
 }
 
 function casusBelli(a: Nation, b: Nation, rng: Rng): string {
@@ -91,8 +91,8 @@ function makePeace(world: WorldState, x: Nation, y: Nation, kind: 'cede' | 'whit
   if (y.relations[x.id]) y.relations[x.id].truceUntil = until;
   nudge(world, x.id, y.id, 12);
   if (kind === 'cede') {
-    emitLog(world, 'major', `${x.name}与${y.name}停战议和，战事暂歇，边境恢复平静。`, ['war', 'peace'], x.id, x.capitalTile);
+    emitLog(world, 'major', `${x.name}与${y.name}停战议和，战事暂歇，边境恢复平静。`, ['war', 'peace'], x.id, x.capitalTile, [y.id]);
   } else {
-    emitLog(world, 'major', `${x.name}与${y.name}打成白和平，双方精疲力竭，鸣金收兵。`, ['war', 'peace'], x.id, x.capitalTile);
+    emitLog(world, 'major', `${x.name}与${y.name}打成白和平，双方精疲力竭，鸣金收兵。`, ['war', 'peace'], x.id, x.capitalTile, [y.id]);
   }
 }

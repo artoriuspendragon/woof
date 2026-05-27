@@ -87,7 +87,7 @@ function expand(world: WorldState, n: Nation, frontier: number[], rng: Rng): voi
       if (o && o !== n.id && world.nations[o]?.alive) {
         nudge(world, n.id, o, -1.8);
         if (rng.chance(0.03)) {
-          emitLog(world, 'medium', `${n.name}的拓荒队推进到${world.nations[o].name}边境，巡逻队互相戒备。`, ['diplomacy', 'border'], n.id, i);
+          emitLog(world, 'medium', `${n.name}的拓荒队推进到${world.nations[o].name}边境，巡逻队互相戒备。`, ['diplomacy', 'border'], n.id, i, [o]);
         }
       } else if (o === null && TERRAIN[world.tiles[j].terrain].passable && !inList.has(j)) {
         candidates.push(j); inList.add(j);   // 向邻近无主地继续吃
@@ -113,7 +113,7 @@ function doTrade(world: WorldState, n: Nation, rng: Rng): void {
   nudge(world, n.id, pid, 6);
   n.stats.wealth = clamp(n.stats.wealth + 4, 0, 100);
   world.nations[pid].stats.wealth = clamp(world.nations[pid].stats.wealth + 4, 0, 100);
-  emitLog(world, 'medium', `${n.name}与${world.nations[pid].name}签订了贸易协定，双方商路繁荣。`, ['diplomacy', 'trade'], n.id, n.capitalTile);
+  emitLog(world, 'medium', `${n.name}与${world.nations[pid].name}签订了贸易协定，双方商路繁荣。`, ['diplomacy', 'trade'], n.id, n.capitalTile, [pid]);
 }
 
 function doIntrigue(world: WorldState, n: Nation, rng: Rng): void {
@@ -125,9 +125,9 @@ function doIntrigue(world: WorldState, n: Nation, rng: Rng): void {
   if (rng.chance(0.18)) {
     // 阴谋暴露
     nudge(world, n.id, target.id, -12);
-    emitLog(world, 'major', `${target.name}查获${n.name}派来的密探，朝野哗然，两国关系骤冷。`, ['intrigue', 'diplomacy'], target.id, target.capitalTile);
+    emitLog(world, 'major', `${target.name}查获${n.name}派来的密探，朝野哗然，两国关系骤冷。`, ['intrigue', 'diplomacy'], target.id, target.capitalTile, [n.id]);
   } else if (rng.chance(0.1)) {
-    emitLog(world, 'minor', `${n.name}的暗探在${target.name}悄悄活动，民间流言四起。`, ['intrigue'], n.id, target.capitalTile);
+    emitLog(world, 'minor', `${n.name}的暗探在${target.name}悄悄活动，民间流言四起。`, ['intrigue'], n.id, target.capitalTile, [target.id]);
   }
 }
 

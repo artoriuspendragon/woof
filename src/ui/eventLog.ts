@@ -31,7 +31,7 @@ export function renderLogPanel(world: WorldState, el: HTMLElement, opts: LogPane
     ? t('log.title.with', { name: nationName(world.nations[filter].species) })
     : t('log.title');
   const entries = world.log
-    .filter((e) => (!filter || e.nation === filter) && (detail || isImportant(e)))
+    .filter((e) => (!filter || e.nation === filter || e.otherNations?.includes(filter)) && (detail || isImportant(e)))
     .slice(-200).reverse();
 
   el.innerHTML = `

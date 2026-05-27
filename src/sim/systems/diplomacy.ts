@@ -34,7 +34,7 @@ export function diplomacy(world: WorldState, rng: Rng): void {
       const shareEnemy = a.atWar.some((e) => b.atWar.includes(e));
       if (rab.value > 50 && !allied && (shareEnemy || rng.chance(0.01))) {
         rab.treaties.push('alliance'); rba.treaties.push('alliance');
-        emitLog(world, 'major', `${a.name}与${b.name}缔结军事同盟，山海为誓。`, ['diplomacy', 'alliance'], a.id, a.capitalTile);
+        emitLog(world, 'major', `${a.name}与${b.name}缔结军事同盟，山海为誓。`, ['diplomacy', 'alliance'], a.id, a.capitalTile, [b.id]);
       }
     }
   }
