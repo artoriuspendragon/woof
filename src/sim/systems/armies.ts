@@ -42,6 +42,7 @@ export function armies(world: WorldState, rng: Rng): void {
 
   // 逐军行动（确定性顺序；当回合已交战者不再重复）
   const fought = new Set<string>();
+  const activeSieges = new Set<number>();   // 本回合被实际围攻的城市 tile
   for (const army of sortedArmies(world)) {
     if (!world.armies[army.id] || fought.has(army.id)) continue;
     const n = world.nations[army.nation];
@@ -107,7 +108,16 @@ export function armies(world: WorldState, rng: Rng): void {
     if (foe) { fieldBattle(world, army, foe, rng); fought.add(army.id); fought.add(foe.id); continue; }
 
     stepToward(world, army, 2);
-    captureAround(world, army, rng);
+    captureAround(world, army, rng, activeSieges);
+  }
+
+  // 本回合无人围攻的城市，攻势缓慢消退（守军在修缮城防）
+  for (const k of Object.keys(world.sieges)) {
+    const tileIdx = Number(k);
+    if (activeSieges.has(tileIdx)) continue;
+    const v = (world.sieges[tileIdx] ?? 0) - 3;
+    if (v <= 0) delete world.sieges[tileIdx];
+    else world.sieges[tileIdx] = v;
   }
 }
 
@@ -367,7 +377,7 @@ function destroyArmy(world: WorldState, army: Army, rng: Rng): void {
 }
 
 // ---------- 占领 / 攻城（从军队位置向外蔓延）----------
-function captureAround(world: WorldState, army: Army, rng: Rng): void {
+function captureAround(world: WorldState, army: Army, rng: Rng, activeSieges: Set<number>): void {
   const n = world.nations[army.nation];
   const budget = 1 + Math.floor(army.size / 45);
   // 起点：军队所在或相邻的敌方地块
@@ -386,24 +396,42 @@ function captureAround(world: WorldState, army: Army, rng: Rng): void {
     const enemy = world.nations[o];
 
     if (t.city > 0) {
-      // 围城损耗：守军和士气持续被消耗
+      const isCap = i === enemy.capitalTile;
+      // 起围阈值：兵力须超过此值,攻势才会累积；否则只是骚扰
+      const startThreshold = (isCap ? 60 : 30 * t.city) + totalStrength(world, o) * 0.08;
+      if (army.size < startThreshold) {
+        // 不足以围城,仅给守军添些麻烦
+        enemy.stats.morale = clamp(enemy.stats.morale - 0.2, 0, 100);
+        continue;
+      }
+
+      // 主动围城：守军 / 士气损耗
       enemy.stats.military = Math.max(0, enemy.stats.military - 4);
       enemy.stats.morale = clamp(enemy.stats.morale - 0.6, 0, 100);
 
-      // 攻陷阈值：城防主要看城池等级（守军规模），加少量国力修正。
-      // 这样守方还在打野战时也能强攻得手，但都城仍不易陷落。
-      const isCap = i === enemy.capitalTile;
-      let need = (isCap ? 90 : 35 * t.city) + totalStrength(world, o) * 0.18;
+      // 陷落所需攻势 (fallNeed)：城镇 35,城市 70,都城 90（都城仍远高,但围久了能下）
+      const fallNeed = isCap ? 90 : (35 + 35 * (t.city - 1));
+      // 每回合攻势增量：基础 1.2/tick，按 surplus 放大；都城较慢；
+      // 守方无野战军时显著加速；微量随机
+      const surplus = army.size - startThreshold;
+      let gain = 1.2 + Math.min(2.5, surplus / 60);
+      if (isCap) gain *= 0.85;
       const hasField = Object.values(world.armies).some((a) => a.nation === o);
-      if (!hasField) need *= 0.5;     // 野战军覆灭后,都城形同虚设
-      need = Math.max(20, need);
+      if (!hasField) gain *= 1.7;
+      gain *= 0.85 + rng.next() * 0.3;
 
-      if (army.size > need && rng.chance(0.5)) {
+      const cur = (world.sieges[i] ?? 0) + gain;
+      world.sieges[i] = cur;
+      activeSieges.add(i);
+
+      // 攻势穿越临界点 → 陷落
+      if (cur >= fallNeed) {
+        delete world.sieges[i];
         t.owner = n.id; t.city = Math.max(1, t.city - 1); t.dev = Math.max(6, t.dev - 12);
         enemy.stats.military *= 0.9;
         pushGrudge(enemy, n.id, world.tick); claimed++;
         emitLog(world, 'major',
-          isCap ? `${n.name}的大军攻陷了${enemy.name}的都城！` : `${n.name}的大军历经苦战，攻陷了${enemy.name}的一座城池！`,
+          isCap ? `${n.name}的大军终于攻陷了${enemy.name}的都城！` : `${n.name}的大军历经苦战，攻陷了${enemy.name}的一座城池！`,
           ['war', 'siege'], n.id, i, [o]);
         addBio(world, army.leaderId, isCap ? `亲率大军攻陷${enemy.name}国都！` : `督军破城，攻克${enemy.name}城池。`);
         if (isCap) { annex(world, n, enemy); return; }
@@ -458,7 +486,11 @@ function isProtectedByEnemyCity(world: WorldState, tile: number, ownerId: Nation
 // ---------- 吞并 ----------
 export function annex(world: WorldState, winner: Nation, loser: Nation): void {
   for (let i = 0; i < world.tiles.length; i++) {
-    if (world.tiles[i].owner === loser.id) { world.tiles[i].owner = winner.id; world.tiles[i].dev = Math.max(6, world.tiles[i].dev - 10); }
+    if (world.tiles[i].owner === loser.id) {
+      world.tiles[i].owner = winner.id;
+      world.tiles[i].dev = Math.max(6, world.tiles[i].dev - 10);
+      if (world.sieges[i] !== undefined) delete world.sieges[i]; // 被吞并的城已易主,围攻记录作废
+    }
   }
   loser.alive = false;
   loser.fellTick = world.tick;

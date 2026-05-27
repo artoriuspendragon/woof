@@ -141,6 +141,7 @@ export interface WorldState {
   charSeq: number;          // 自增角色 id（确定性、可序列化）
   armies: Record<string, Army>;
   armySeq: number;          // 自增军队 id
+  sieges: Record<number, number>; // 每座被围之城的攻势进度 (tile index → 0..fallNeed)
 }
 
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;

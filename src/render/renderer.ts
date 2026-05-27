@@ -236,6 +236,12 @@ export class Renderer {
         if (isCap)         drawCastle(ctx, sx, sy, size, color);
         else if (lvl >= 2) drawCityCluster(ctx, sx, sy, size, color);
         else               drawCottage(ctx, sx, sy, size, color);
+        // 围攻进度环：被围之城外缘画一段渐增的蜡红弧
+        const siege = world.sieges[i];
+        if (siege && siege > 0) {
+          const fallNeed = isCap ? 140 : (35 + 35 * (lvl - 1));
+          drawSiegeRing(ctx, sx, sy, size, Math.min(1, siege / fallNeed));
+        }
       } else {
         // 低缩放回退：圆点 + 首都内白点
         const r = Math.max(2.5, s * (isCap ? 0.5 : lvl >= 2 ? 0.34 : 0.24));
@@ -414,6 +420,27 @@ function drawCottage(ctx: CanvasRenderingContext2D, sx: number, sy: number, size
 function drawCityCluster(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number, color: string): void {
   drawCottage(ctx, sx + size * 0.24, sy - size * 0.06, size * 0.72, color);
   drawCottage(ctx, sx - size * 0.18, sy + size * 0.02, size * 0.88, color);
+}
+
+// Siege progress arc: wax-red ring growing clockwise as the city's siege fills.
+function drawSiegeRing(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number, frac: number): void {
+  if (frac <= 0) return;
+  const r = size * 0.78;
+  ctx.save();
+  // dim full-ring track (so partial progress reads as a gauge)
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(168, 57, 44, 0.18)';
+  ctx.lineWidth = Math.max(2.4, size * 0.10);
+  ctx.lineCap = 'butt';
+  ctx.stroke();
+  // bright filled portion
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+  ctx.strokeStyle = '#a8392c';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
 }
 
 // Castle (= capital, level 3): two towers + lower curtain wall + gold pennant.

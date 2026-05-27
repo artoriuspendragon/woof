@@ -114,7 +114,7 @@ export function createWorld(seed: number, width = DEFAULT_W, height = DEFAULT_H)
   const world: WorldState = {
     version: WORLD_VERSION, seed, rngState: rng.state, tick: 0,
     width, height, tiles, nations: {}, characters: {}, log: [], logSeq: 1, charSeq: 1,
-    armies: {}, armySeq: 1,
+    armies: {}, armySeq: 1, sieges: {},
   };
 
   placeNations(world, rng);
