@@ -262,9 +262,9 @@ applyStaticI18n();
 refreshHud();
 setTimeout(() => { hintEl.style.opacity = '0'; }, 6000);
 
-// 调试便利
+// 调试便利（亡国也可以被 focus → 显示怀念碑）
 const focus = params.get('focus');
-if (focus && world.nations[focus]?.alive) {
+if (focus && world.nations[focus]) {
   selected = focus;
   if (params.get('bio')) openBio(world.nations[focus].rulerId);
   else openStory(focus);
