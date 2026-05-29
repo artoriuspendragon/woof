@@ -21,14 +21,13 @@ const pixiCanvas = document.getElementById('pixiworld') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 let pixiMap: PixiMap | null = null;
 
-try {
-  pixiMap = new PixiMap(pixiCanvas);
-  await pixiMap.init();
-  renderer.setBaseLayerEnabled(false);
-  document.documentElement.classList.add('pixi-ready');
-} catch (err) {
-  console.warn('PixiJS renderer unavailable; falling back to canvas map.', err);
-  pixiCanvas.classList.add('hidden');
+// Reject if a promise takes too long, so one hung dependency can't wedge startup.
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)),
+  ]);
 }
 
 function syncPixiWorld(): void {
@@ -67,9 +66,9 @@ let hoverTile: number | null = null;
 let visualDay = 1;
 
 renderer.resize();
-pixiMap?.resize();
 renderer.setWorld(world);
-syncPixiWorld();
+// The 2D canvas renderer is now live and drawing; PixiJS is brought up later,
+// without blocking, and only takes over if it initializes successfully.
 
 // ---------- DOM refs ----------
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -365,3 +364,22 @@ if (zoomParam) {
   renderer.cam.scale = Number(zoomParam);
   if (selected) centerOnTile(world.nations[selected].capitalTile);
 }
+
+// PixiJS is a cosmetic upgrade over the always-on 2D canvas renderer, which is
+// already drawing by now. Bring it up WITHOUT blocking startup: in production
+// builds Application.init() can hang (async WebGPU→WebGL detection over split
+// chunks), and a top-level `await` on it previously froze the whole app into a
+// blank blue screen. Time it out and just stay on the canvas renderer if so.
+void (async () => {
+  try {
+    const map = new PixiMap(pixiCanvas);
+    await withTimeout(map.init(), 8000);
+    pixiMap = map;
+    pixiMap.resize();
+    syncPixiWorld(); // paints the world and switches off the 2D base layer
+    document.documentElement.classList.add('pixi-ready');
+  } catch (err) {
+    console.warn('PixiJS map unavailable; staying on the canvas renderer.', err);
+    pixiCanvas.classList.add('hidden');
+  }
+})();

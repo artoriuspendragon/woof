@@ -145,6 +145,9 @@ export class PixiMap {
   async init(): Promise<void> {
     await this.app.init({
       canvas: this.canvas,
+      // Force WebGL: the WebGPU auto-detection probe can hang in production
+      // builds, and WebGL renders this map identically.
+      preference: 'webgl',
       backgroundAlpha: 0,
       antialias: true,
       autoDensity: true,
