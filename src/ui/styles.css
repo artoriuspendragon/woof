@@ -79,11 +79,40 @@ html, body {
 }
 
 #app { position: fixed; inset: 0; }
+#app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0, rgba(255, 255, 255, 0.035) 1px, transparent 1px, transparent 5px),
+    repeating-linear-gradient(0deg, rgba(46, 31, 16, 0.018) 0, rgba(46, 31, 16, 0.018) 1px, transparent 1px, transparent 7px);
+  mix-blend-mode: soft-light;
+}
+#app::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(255, 248, 226, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(46, 31, 16, 0.10), inset 0 0 42px rgba(46, 31, 16, 0.12);
+  pointer-events: none;
+  z-index: 2;
+}
+#pixiworld,
 #world {
   position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+}
+#pixiworld {
+  z-index: 0;
+  pointer-events: none;
+}
+#world {
+  z-index: 1;
   cursor: grab;
 }
 #world:active { cursor: grabbing; }
+#world.god-cursor { cursor: crosshair; }
 
 /* ─────────────────────────────────────────────────────────────
  * Buttons (one base, role-specific modifiers)
@@ -92,6 +121,10 @@ html, body {
 button {
   font-family: inherit; cursor: pointer; border: none; color: inherit;
   -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible {
+  outline: 2px solid rgba(184, 139, 61, 0.7);
+  outline-offset: 2px;
 }
 
 .ghost {
@@ -103,7 +136,7 @@ button {
   color: var(--ink-1);
   box-shadow: var(--book-shadow);
   transition: transform 0.14s ease, box-shadow 0.18s ease, background 0.18s ease;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 .ghost:hover { transform: translateY(-1px); box-shadow: var(--book-shadow-hover); background: var(--paper-0); }
 .ghost:active { transform: translateY(0); box-shadow: var(--book-shadow), var(--inset-shadow); }
@@ -129,6 +162,46 @@ button {
 #statusbar > * { pointer-events: auto; }
 .spacer { flex: 1; }
 
+.brandmark {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 10px;
+  background: rgba(251, 243, 220, 0.94);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--r);
+  box-shadow: var(--book-shadow);
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+.brandcrest {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--wax);
+  color: var(--paper-0);
+  box-shadow: 0 1px 0 rgba(255, 250, 230, 0.32) inset, 0 0 0 2px rgba(168, 57, 44, 0.12);
+  font-size: 16px;
+}
+.brandcopy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.02;
+}
+.brandcopy strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+.brandcopy small {
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
 /* Year + season — the ceremonial label */
 .plank {
   font-family: var(--font-display);
@@ -139,7 +212,7 @@ button {
   border-radius: var(--r);
   padding: 7px 18px;
   box-shadow: var(--book-shadow);
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   line-height: 1.15;
   position: relative;
 }
@@ -185,7 +258,7 @@ button {
   background: transparent;
   padding: 4px 4px;
   box-shadow: none;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   line-height: 1.2;
   animation: breathe 4.2s ease-in-out infinite;
 }
@@ -215,7 +288,7 @@ button {
 .rightgroup > .seed {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -265,7 +338,7 @@ button {
   font-family: var(--font-display);
   font-size: 22px; font-weight: 600;
   color: var(--ink-1);
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
   line-height: 1.15;
   margin-bottom: 4px;
 }
@@ -290,7 +363,7 @@ button {
 .stat .lab {
   color: var(--ink-3);
   font-size: 10.5px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
   font-weight: 500;
 }
@@ -314,7 +387,7 @@ button {
   color: var(--ink-2);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 /* Mood line — italic, leading mark */
@@ -333,7 +406,7 @@ button {
 
 .reltitle {
   font-size: 10.5px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--ink-3);
   margin: 12px 0 6px;
@@ -423,7 +496,7 @@ button {
 .fallen-tag {
   font-family: var(--font-display);
   font-size: 10px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--ink-3);
   border: 1px solid var(--paper-deep);
@@ -457,7 +530,7 @@ button {
   font-size: 13px;
   color: var(--ink-2);
   line-height: 1.5;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
   position: relative;
 }
 #nationcard.memorial .obituary::before {
@@ -506,7 +579,7 @@ button {
   font-size: 19px; font-weight: 600;
   color: var(--ink-1);
   line-height: 1.18;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
 }
 .btitle {
   font-family: var(--font-display);
@@ -515,7 +588,7 @@ button {
   color: var(--gold);
   font-weight: 500;
   margin-left: 6px;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
 }
 .bsub {
   font-size: 11.5px;
@@ -557,7 +630,7 @@ button {
 .biorow .when {
   color: var(--ink-3);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
   font-weight: 500;
   padding-top: 2px;
@@ -587,7 +660,7 @@ button {
   line-height: 1.4;
   box-shadow: var(--book-shadow);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
 }
 
 .lv { margin-right: 4px; opacity: 0.9; font-style: normal; }
@@ -622,7 +695,7 @@ button {
   font-size: 17px;
   font-weight: 600;
   color: var(--ink-1);
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
 }
 .filters { display: flex; gap: 4px; flex-wrap: wrap; }
 
@@ -696,7 +769,7 @@ button {
 .logrow .when {
   color: var(--ink-3);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -732,6 +805,11 @@ button {
   align-items: stretch;
   z-index: 5;
   width: 168px;
+}
+@media (min-width: 901px) {
+  #nationcard:not(.hidden) ~ #godbar {
+    right: 328px;
+  }
 }
 .god {
   position: relative;
@@ -795,8 +873,200 @@ button {
   pointer-events: none;
   transition: opacity 0.6s;
   z-index: 3;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
   line-height: 1.35;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Event toasts — map-side "something happened" calls
+ * ───────────────────────────────────────────────────────────── */
+
+#toasts {
+  position: absolute;
+  left: 16px;
+  top: 72px;
+  width: min(380px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 7;
+}
+.toast {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 14px 10px 12px;
+  background: rgba(251, 243, 220, 0.94);
+  border: 1px solid var(--paper-edge);
+  border-left: 3px solid var(--wax);
+  border-radius: var(--r);
+  box-shadow: var(--book-shadow);
+  color: var(--ink-1);
+  text-align: left;
+  pointer-events: auto;
+  transform-origin: 0 50%;
+  animation: toastin 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast.epic { border-left-color: var(--gold); background: rgba(255, 248, 226, 0.97); }
+.toast.leaving {
+  animation: toastout 0.24s ease forwards;
+  pointer-events: none;
+}
+.toast:hover {
+  transform: translateX(2px);
+  box-shadow: var(--book-shadow-hover);
+}
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--paper-2);
+  font-size: 16px;
+  line-height: 1;
+}
+.toast-body {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@keyframes toastin {
+  from { opacity: 0; transform: translateX(-10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toastout {
+  to { opacity: 0; transform: translateX(-10px) scale(0.98); }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Small screens
+ * ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  #statusbar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    gap: 7px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .brandmark { height: 38px; padding-right: 12px; }
+  .brandcopy small { display: none; }
+  .plank { font-size: 17px; padding: 7px 13px; }
+  .speed button { padding: 5px 10px; }
+  .cloud { flex-basis: 100%; padding-left: 4px; }
+  .rightgroup > * { padding: 7px 10px; }
+  .rightgroup > .seed { display: none; }
+
+  #nationcard {
+    top: 104px;
+    right: 10px;
+    width: min(330px, calc(100vw - 20px));
+    max-height: calc(100% - 190px);
+  }
+  #biopanel {
+    top: 104px;
+    left: 10px;
+    right: auto;
+    width: min(320px, calc(100vw - 20px));
+    max-height: calc(100% - 190px);
+  }
+  #hint {
+    top: auto;
+    bottom: 118px;
+    max-width: calc(100vw - 32px);
+    text-align: center;
+  }
+  #toasts { top: 106px; left: 10px; width: min(360px, calc(100vw - 20px)); }
+}
+
+@media (max-width: 640px) {
+  #app::after { inset: 4px; }
+  #statusbar { gap: 6px; }
+  .spacer { display: none; }
+  .brandmark {
+    width: 42px;
+    padding: 6px;
+    justify-content: center;
+  }
+  .brandcopy { display: none; }
+  .plank { font-size: 15px; }
+  .cloud {
+    order: 2;
+    flex: 1 0 100%;
+    font-size: 13px;
+  }
+  .speed { order: 3; width: 100%; justify-content: space-between; }
+  .speed button { flex: 1; min-width: 0; }
+  .rightgroup { margin-left: auto; }
+
+  #chronicle {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    gap: 8px;
+  }
+  .latest {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+  #logtoggle { padding: 9px 10px; }
+  #logpanel {
+    left: 10px;
+    right: 10px;
+    bottom: 58px;
+    max-height: 52%;
+  }
+  .logrow {
+    grid-template-columns: 58px 14px 1fr;
+    gap: 6px;
+    padding: 8px 6px;
+    font-size: 12.5px;
+  }
+  .logbar { padding: 10px 12px; gap: 8px; }
+
+  #godbar {
+    right: 10px;
+    bottom: 62px;
+    width: 142px;
+  }
+  .god { padding: 8px 10px 8px 13px; font-size: 12px; gap: 6px; }
+  #nationcard:not(.hidden) ~ #godbar,
+  #biopanel:not(.hidden) ~ #godbar {
+    display: none;
+  }
+  #nationcard:not(.hidden) ~ #toasts,
+  #biopanel:not(.hidden) ~ #toasts {
+    display: none;
+  }
+  #hint { display: none; }
+
+  #nationcard,
+  #biopanel {
+    top: 136px;
+    width: calc(100vw - 20px);
+    max-height: calc(100% - 216px);
+  }
+  #biopanel { z-index: 8; }
+  .stat { grid-template-columns: 34px 1fr 50px; gap: 7px; }
+  #toasts {
+    top: 162px;
+    width: calc(100vw - 20px);
+  }
+  .toast { grid-template-columns: 24px 1fr; padding: 9px 11px; }
+  .toast-icon { width: 24px; height: 24px; font-size: 14px; }
+  .toast-body { font-size: 12.5px; -webkit-line-clamp: 2; }
 }
 
 /* ─────────────────────────────────────────────────────────────

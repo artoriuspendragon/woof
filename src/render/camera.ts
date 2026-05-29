@@ -6,7 +6,12 @@ export class Camera {
   resize(vw: number, vh: number): void { this.vw = vw; this.vh = vh; }
 
   fit(worldW: number, worldH: number): void {
-    this.scale = Math.min(this.vw / worldW, this.vh / worldH) * 0.96;
+    const fullMapScale = Math.min(this.vw / worldW, this.vh / worldH) * 0.96;
+    // Portrait screens feel more game-like when the world fills the playfield
+    // and invites panning, instead of shrinking to a postcard in the middle.
+    this.scale = this.vw < 640
+      ? Math.min(16, Math.max(fullMapScale, (this.vh / worldH) * 0.72))
+      : fullMapScale;
     this.x = worldW / 2;
     this.y = worldH / 2;
   }

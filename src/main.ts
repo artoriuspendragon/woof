@@ -4,17 +4,49 @@ import { yearOf, seasonOf } from './sim/types';
 import { createWorld } from './sim/world';
 import { tick } from './sim/tick';
 import { Renderer, type FxKind } from './render/renderer';
+import { PixiMap } from './render/pixiMap';
 import { renderNationCard } from './ui/nationCard';
 import { renderLatest, renderLogPanel, type LogPanelOpts } from './ui/eventLog';
 import { renderBioPanel } from './ui/bioPanel';
+import { LEVEL_ICON } from './ui/format';
 import { harvestBless, harmonyBless, heroBorn } from './sim/interventions';
 import { t, getLang, setLang, onLangChange, nationName } from './ui/i18n';
 
 type Speed = 'pause' | 'x1' | 'x2' | 'x4';
-const SIM_HZ: Record<Speed, number> = { pause: 0, x1: 2, x2: 4, x4: 8 };
+const SIM_HZ: Record<Speed, number> = { pause: 0, x1: 0.35, x2: 0.7, x4: 1.4 };
+const DAYS_PER_SEASON = 90;
 
 const canvas = document.getElementById('world') as HTMLCanvasElement;
+const pixiCanvas = document.getElementById('pixiworld') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
+let pixiMap: PixiMap | null = null;
+
+try {
+  pixiMap = new PixiMap(pixiCanvas);
+  await pixiMap.init();
+  renderer.setBaseLayerEnabled(false);
+  document.documentElement.classList.add('pixi-ready');
+} catch (err) {
+  console.warn('PixiJS renderer unavailable; falling back to canvas map.', err);
+  pixiCanvas.classList.add('hidden');
+}
+
+function syncPixiWorld(): void {
+  if (!pixiMap) return;
+  try {
+    pixiMap.setWorld(world);
+    renderer.setBaseLayerEnabled(false);
+    pixiCanvas.classList.remove('hidden');
+    delete document.documentElement.dataset.pixiError;
+  } catch (err) {
+    document.documentElement.dataset.pixiError = err instanceof Error ? err.message : String(err);
+    console.error('PixiJS map layer failed; falling back to canvas renderer.', err);
+    pixiMap = null;
+    renderer.setBaseLayerEnabled(true);
+    document.documentElement.classList.remove('pixi-ready');
+    pixiCanvas.classList.add('hidden');
+  }
+}
 
 // URL params: ?seed= reproduce world; ?prerun=N fast-forward; ?focus=, ?bio=1, ?zoom=N
 const params = new URLSearchParams(location.search);
@@ -30,18 +62,24 @@ let showDetail = false;
 let bioOpen: CharId | null = null;
 let godMode: 'harvest' | 'harmony' | 'hero' | null = null;
 let harmonyFirst: NationId | null = null;
-let lastLogId = 0;
+let lastLogId = world.logSeq - 1;
+let hoverTile: number | null = null;
+let visualDay = 1;
 
 renderer.resize();
+pixiMap?.resize();
 renderer.setWorld(world);
+syncPixiWorld();
 
 // ---------- DOM refs ----------
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const timeEl = $('time'), evoEl = $('evostate'), seedEl = $('seedlabel');
+const brandTagEl = $('brandtag');
 const cardEl = $<HTMLElement>('nationcard');
 const bioEl = $<HTMLElement>('biopanel');
 const latestEl = $('loglatest'), panelEl = $<HTMLElement>('logpanel');
 const hintEl = $('hint');
+const toastsEl = $('toasts');
 const langBtn = $('langtoggle');
 const newWorldBtn = $<HTMLButtonElement>('newworld');
 const logBtn = $<HTMLButtonElement>('logtoggle');
@@ -49,10 +87,15 @@ const logBtn = $<HTMLButtonElement>('logtoggle');
 // ---------- 世界控制 ----------
 function newWorld(): void {
   world = createWorld((Math.random() * 1e9) | 0);
-  selected = null; logFilter = null; lastLogId = 0; bioOpen = null;
+  selected = null; logFilter = null; lastLogId = world.logSeq - 1; bioOpen = null; hoverTile = null;
+  godMode = null; harmonyFirst = null;
   renderer.setWorld(world);
+  syncPixiWorld();
   cardEl.classList.add('hidden');
   bioEl.classList.add('hidden');
+  toastsEl.replaceChildren();
+  document.querySelectorAll<HTMLButtonElement>('#godbar .god').forEach((b) => b.classList.remove('armed'));
+  canvas.classList.remove('god-cursor');
   applyStaticI18n();
   refreshHud();
 }
@@ -64,10 +107,19 @@ function setSpeed(s: Speed): void {
   evoEl.textContent = t(s === 'pause' ? 'evo.paused' : 'evo.running');
 }
 
+function renderClock(day = visualDay): void {
+  timeEl.textContent = t('time.day', {
+    year: yearOf(world.tick),
+    season: t(`season.${seasonOf(world.tick)}`),
+    day,
+  });
+}
+
 // ---------- 国际化：把静态 HTML 上的中文/英文也按当前语言更新一遍 ----------
 function applyStaticI18n(): void {
   document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en';
   document.title = t('app.tab');
+  brandTagEl.textContent = t('brand.subtitle');
   seedEl.textContent = t('seed', { n: world.seed });
   langBtn.textContent = getLang() === 'zh' ? t('lang.label.zh') + ' / EN' : '中 / ' + t('lang.label.en');
   langBtn.title = t('lang.toggle.title');
@@ -90,7 +142,7 @@ function applyStaticI18n(): void {
 
 // ---------- HUD 刷新 ----------
 function refreshHud(): void {
-  timeEl.textContent = t('time', { year: yearOf(world.tick), season: t(`season.${seasonOf(world.tick)}`) });
+  renderClock();
   renderLatest(world, latestEl, showDetail);
   if (selected) renderNationCard(world, selected, cardEl, openStory, openBio);
   if (logOpen) renderLogPanel(world, panelEl, logPanelOpts());
@@ -144,15 +196,43 @@ function harvestFx(): void {
   for (const e of world.log) {
     if (e.id <= lastLogId) continue;
     lastLogId = e.id;
+    if (e.level === 'major' || e.level === 'epic') pushToast(e);
     if (e.tile === undefined) continue;
     const k = fxForLog(e);
     if (k) renderer.pushFx(e.tile, k);
   }
 }
 
+function pushToast(e: LogEntry): void {
+  const btn = document.createElement('button');
+  btn.className = `toast ${e.level}`;
+  btn.type = 'button';
+  btn.title = t('toast.jump.title');
+
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.textContent = LEVEL_ICON[e.level];
+  const body = document.createElement('span');
+  body.className = 'toast-body';
+  body.textContent = e.text;
+  btn.append(icon, body);
+
+  btn.onclick = () => {
+    onPickLog(e.tile, e.nation);
+    btn.classList.add('leaving');
+    window.setTimeout(() => btn.remove(), 180);
+  };
+  toastsEl.appendChild(btn);
+  while (toastsEl.children.length > 4) toastsEl.firstElementChild?.remove();
+  window.setTimeout(() => {
+    btn.classList.add('leaving');
+    window.setTimeout(() => btn.remove(), 260);
+  }, e.level === 'epic' ? 6800 : 5200);
+}
+
 function fxForLog(e: LogEntry): FxKind | null {
   if (e.tags.includes('fall')) return 'fall';
-  if (e.tags.includes('declare') || e.tags.includes('split') || e.tags.includes('siege')) return 'war';
+  if (e.tags.includes('declare') || e.tags.includes('split') || e.tags.includes('siege') || e.tags.includes('battle')) return 'war';
   if (e.tags.includes('build')) return 'build';
   if (e.tags.includes('good')) return 'good';
   if (e.tags.includes('culture')) return 'celebrate';
@@ -167,24 +247,31 @@ function frame(now: number): void {
   const hz = SIM_HZ[speed];
   if (hz > 0) {
     acc += dt * hz;
-    let budget = 4;
     let stepped = false;
-    while (acc >= 1 && budget-- > 0) { tick(world); acc -= 1; stepped = true; }
-    if (acc > budget) acc = 0;
+    if (acc >= 1) { tick(world); acc -= 1; stepped = true; }
+    if (acc > 1.2) acc = 0.95;
+    visualDay = Math.max(1, Math.min(DAYS_PER_SEASON, Math.floor(acc * DAYS_PER_SEASON) + 1));
     if (stepped) { harvestFx(); refreshHud(); }
+    else renderClock();
   }
-  renderer.render(world, selected);
+  pixiMap?.render(world, selected, hoverTile, renderer.cam);
+  renderer.render(world, selected, hoverTile);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // ---------- 输入 ----------
 let dragging = false, moved = false, lx = 0, ly = 0;
-canvas.addEventListener('pointerdown', (e) => { dragging = true; moved = false; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerdown', (e) => { dragging = true; moved = false; hoverTile = null; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!dragging) {
+    hoverTile = renderer.tileAt(e.clientX - rect.left, e.clientY - rect.top);
+    return;
+  }
   const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
   if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+  hoverTile = null;
   renderer.cam.pan(dx, dy);
 });
 canvas.addEventListener('pointerup', (e) => {
@@ -193,18 +280,20 @@ canvas.addEventListener('pointerup', (e) => {
   const rect = canvas.getBoundingClientRect();
   const tileIdx = renderer.tileAt(e.clientX - rect.left, e.clientY - rect.top);
   if (tileIdx === null) return;
+  hoverTile = tileIdx;
   const owner = world.tiles[tileIdx].owner;
   if (godMode) { applyGod(owner); return; }
-  if (owner && world.nations[owner]?.alive) { selected = owner; refreshHud(); }
+  if (owner && world.nations[owner]?.alive) { selected = owner; renderer.pushFx(tileIdx, 'select'); refreshHud(); }
   else { selected = null; cardEl.classList.add('hidden'); }
 });
+canvas.addEventListener('pointerleave', () => { hoverTile = null; });
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   renderer.cam.zoomAt(e.deltaY < 0 ? 1.12 : 0.89, e.clientX - rect.left, e.clientY - rect.top);
 }, { passive: false });
 
-window.addEventListener('resize', () => renderer.resize());
+window.addEventListener('resize', () => { renderer.resize(); pixiMap?.resize(); });
 
 // ---------- 神明干预 ----------
 function armGod(mode: 'harvest' | 'harmony' | 'hero'): void {
@@ -212,6 +301,7 @@ function armGod(mode: 'harvest' | 'harmony' | 'hero'): void {
   harmonyFirst = null;
   document.querySelectorAll<HTMLButtonElement>('#godbar .god').forEach((b) =>
     b.classList.toggle('armed', !!godMode && b.dataset.god === godMode));
+  canvas.classList.toggle('god-cursor', !!godMode);
   hintEl.textContent = godMode === 'harmony' ? t('hint.god.harmony1')
     : godMode ? t('hint.god.cast') : t('hint.normal');
   hintEl.style.opacity = '1';

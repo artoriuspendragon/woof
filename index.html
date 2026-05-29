@@ -7,10 +7,15 @@
   </head>
   <body>
     <div id="app">
+      <canvas id="pixiworld" aria-hidden="true"></canvas>
       <canvas id="world"></canvas>
 
       <!-- 顶部：轻量状态条 -->
       <header id="statusbar">
+        <div class="brandmark" aria-label="Woof Animal Revolution">
+          <span class="brandcrest">🐾</span>
+          <span class="brandcopy"><strong>Woof</strong><small id="brandtag">动物革命模拟器</small></span>
+        </div>
         <div class="plank" id="time">第 1 年 · 春</div>
         <div class="speed" id="speed">
           <button data-speed="pause" title="暂停 (空格)">❚❚</button>
@@ -39,6 +44,9 @@
         <button id="logtoggle" class="ghost">📖 编年史</button>
       </footer>
       <section id="logpanel" class="hidden"></section>
+
+      <!-- 重大事件弹幕：不抢地图，只在世界真的发生事情时出现 -->
+      <div id="toasts" aria-live="polite"></div>
 
       <!-- 右下：低调神明干预 -->
       <div id="godbar">

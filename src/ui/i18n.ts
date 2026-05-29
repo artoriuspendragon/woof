@@ -42,14 +42,16 @@ export function t(key: string, args?: Record<string, string | number>): string {
 const ZH: Dict = {
   // 顶部 / 状态
   'app.tab': 'Woof · 动物文明箱庭',
+  'brand.subtitle': '动物革命模拟器',
   'time': '第 {year} 年 · {season}',
+  'time.day': '第 {year} 年 · {season} · 第 {day} 日',
   'season.spring': '春', 'season.summer': '夏', 'season.autumn': '秋', 'season.winter': '冬',
   'evo.running': '自动演化中',
   'evo.paused': '已暂停',
   'speed.pause.title': '暂停 (空格)',
-  'speed.x1.title': '1×',
-  'speed.x2.title': '2×',
-  'speed.x4.title': '4×',
+  'speed.x1.title': '慢速：看清行军与战斗',
+  'speed.x2.title': '中速：平稳推进',
+  'speed.x4.title': '快速：仍保留动画',
   'newworld.label': '🎲 新世界',
   'newworld.title': '换一个世界种子',
   'seed': '种子 {n}',
@@ -76,6 +78,7 @@ const ZH: Dict = {
   'log.all': '全部',
   'log.empty': '暂无大事记。勾选“显示细节”查看全部。',
   'log.latest.placeholder': '世界初成，五国并立……',
+  'toast.jump.title': '点击定位事件',
 
   // 国家卡
   'card.subhead': '「{capital}」· {ruler} 在位',
@@ -156,14 +159,16 @@ const ZH: Dict = {
 
 const EN: Dict = {
   'app.tab': 'Woof · Animal Civ Sandbox',
+  'brand.subtitle': 'Animal Revolution',
   'time': 'Year {year} · {season}',
+  'time.day': 'Year {year} · {season} · Day {day}',
   'season.spring': 'Spring', 'season.summer': 'Summer', 'season.autumn': 'Autumn', 'season.winter': 'Winter',
   'evo.running': 'Auto-evolving',
   'evo.paused': 'Paused',
   'speed.pause.title': 'Pause (Space)',
-  'speed.x1.title': '1×',
-  'speed.x2.title': '2×',
-  'speed.x4.title': '4×',
+  'speed.x1.title': 'Slow: watch marches and battles',
+  'speed.x2.title': 'Medium: steady simulation',
+  'speed.x4.title': 'Fast: animation still visible',
   'newworld.label': '🎲 New World',
   'newworld.title': 'Reroll the world seed',
   'seed': 'Seed {n}',
@@ -187,6 +192,7 @@ const EN: Dict = {
   'log.all': 'All',
   'log.empty': 'No major events yet. Tick “Show details” to see all.',
   'log.latest.placeholder': 'The world is born — five nations stand…',
+  'toast.jump.title': 'Click to jump to this event',
 
   'card.subhead': 'Capital: {capital} · {ruler} reigning',
   'card.subhead.personality': 'Capital: {capital} · {ruler} ({personality}) reigning',

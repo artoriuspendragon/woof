@@ -69,7 +69,7 @@ export function armies(world: WorldState, rng: Rng): void {
     // 和平时期：班师回朝，抵达都城即解散，兵力回流后备
     if (n.atWar.length === 0) {
       army.mode = 'home'; army.target = n.capitalTile;
-      stepToward(world, army, 2);
+      stepToward(world, army, 1);
       if (army.tile === n.capitalTile) {
         n.stats.military += Math.floor(army.size * 0.85);
         addBio(world, army.leaderId, '班师回朝，刀枪入库。');
@@ -81,7 +81,7 @@ export function armies(world: WorldState, rng: Rng): void {
     // 败战后撤退：数回合内只顾回援，不寻战、不占地（让胜方乘势推进）
     if (army.retreatUntil && army.retreatUntil > world.tick) {
       army.mode = 'home'; army.target = n.capitalTile;
-      stepToward(world, army, 2);
+      stepToward(world, army, 1);
       continue;
     }
 
@@ -89,7 +89,7 @@ export function armies(world: WorldState, rng: Rng): void {
     if (army.supply < 25 && !supplied) {
       const dst = nearestOwnCity(world, army) ?? n.capitalTile;
       army.mode = 'home'; army.target = dst;
-      stepToward(world, army, 2);
+      stepToward(world, army, 1);
       continue;
     }
 
@@ -107,7 +107,7 @@ export function armies(world: WorldState, rng: Rng): void {
     const foe = enemyArmyNear(world, army, fought);
     if (foe) { fieldBattle(world, army, foe, rng); fought.add(army.id); fought.add(foe.id); continue; }
 
-    stepToward(world, army, 2);
+    stepToward(world, army, 1);
     captureAround(world, army, rng, activeSieges);
   }
 
