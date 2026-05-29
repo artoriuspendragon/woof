@@ -1,16 +1,17 @@
 import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { TerrainType, WorldState } from '../sim/types';
 import { Camera } from './camera';
+import { drawTerrainBrush, isTerrainArtReady, TERRAIN_BRUSH, terrainArtVersion, type TerrainBrushId } from './terrainArt';
 
 const TERRAIN_PALETTE: Record<TerrainType, { base: string; wash: string; ink: number; detail: number }> = {
-  plain:    { base: '#cfe89b', wash: '#eff8be', ink: 0x5f8f45, detail: 0xfff4b3 },
-  forest:   { base: '#87c276', wash: '#bddf8b', ink: 0x2f6f44, detail: 0xd9ef9e },
-  hill:     { base: '#d2bf86', wash: '#ead69c', ink: 0x8a7044, detail: 0xffe0a2 },
-  mountain: { base: '#aaa18a', wash: '#ccc3a8', ink: 0x5a5248, detail: 0xf1e4bd },
-  lake:     { base: '#75cce8', wash: '#ace8f5', ink: 0x317c9d, detail: 0xffffff },
-  river:    { base: '#86d9ef', wash: '#beedf7', ink: 0x3a89a5, detail: 0xffffff },
-  marsh:    { base: '#abc38d', wash: '#d5dda0', ink: 0x57764f, detail: 0xf4e7a5 },
-  sand:     { base: '#eedc9b', wash: '#fff0b8', ink: 0xa48343, detail: 0xffffff },
+  plain:    { base: '#c8e978', wash: '#f0f7ad', ink: 0x5f8f45, detail: 0xfff4b3 },
+  forest:   { base: '#75ba62', wash: '#bfe17d', ink: 0x2f6f44, detail: 0xd9ef9e },
+  hill:     { base: '#d9c36e', wash: '#f0d990', ink: 0x8a7044, detail: 0xffe0a2 },
+  mountain: { base: '#9d9780', wash: '#c9bea0', ink: 0x5a5248, detail: 0xf1e4bd },
+  lake:     { base: '#56c8e1', wash: '#9ee9f3', ink: 0x317c9d, detail: 0xffffff },
+  river:    { base: '#67d5ec', wash: '#b8eef6', ink: 0x3a89a5, detail: 0xffffff },
+  marsh:    { base: '#9fc37c', wash: '#d1dc92', ink: 0x57764f, detail: 0xf4e7a5 },
+  sand:     { base: '#e8cf7d', wash: '#ffecaa', ink: 0xa48343, detail: 0xffffff },
   snow:     { base: '#edf7fb', wash: '#ffffff', ink: 0x8193a3, detail: 0xbfe8f6 },
 };
 
@@ -96,6 +97,48 @@ function paintMaskSplat(
   ctx.fill();
 }
 
+function terrainBrushAlpha(terrain: TerrainType): number {
+  switch (terrain) {
+    case 'plain': return 0.30;
+    case 'forest': return 0.46;
+    case 'hill': return 0.38;
+    case 'mountain': return 0.48;
+    case 'lake': return 0.50;
+    case 'river': return 0.50;
+    case 'marsh': return 0.42;
+    case 'sand': return 0.40;
+    case 'snow': return 0.45;
+  }
+}
+
+function terrainBrushDensity(terrain: TerrainType): number {
+  switch (terrain) {
+    case 'plain': return 0.040;
+    case 'forest': return 0.18;
+    case 'hill': return 0.12;
+    case 'mountain': return 0.15;
+    case 'lake': return 0.12;
+    case 'river': return 0.20;
+    case 'marsh': return 0.14;
+    case 'sand': return 0.12;
+    case 'snow': return 0.14;
+  }
+}
+
+function terrainBrushSize(terrain: TerrainType): number {
+  switch (terrain) {
+    case 'plain': return 2.55;
+    case 'forest': return 2.25;
+    case 'hill': return 2.30;
+    case 'mountain': return 2.50;
+    case 'lake': return 2.70;
+    case 'river': return 2.90;
+    case 'marsh': return 2.35;
+    case 'sand': return 2.50;
+    case 'snow': return 2.55;
+  }
+}
+
 function clearCanvas(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -137,6 +180,7 @@ export class PixiMap {
   private detail = new Graphics();
   private sea = new Graphics();
   private lastTerritoryKey = '';
+  private lastTerrainArtVersion = -1;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.app = new Application();
@@ -166,6 +210,7 @@ export class PixiMap {
 
   setWorld(world: WorldState): void {
     this.lastTerritoryKey = '';
+    this.lastTerrainArtVersion = terrainArtVersion();
     this.drawTerrain(world);
     this.drawCoastline(world);
     this.drawDetails(world);
@@ -174,6 +219,11 @@ export class PixiMap {
   render(world: WorldState, _selected: string | null, _hoveredTile: number | null, cam: Camera): void {
     this.root.position.set(cam.vw / 2 - cam.x * cam.scale, cam.vh / 2 - cam.y * cam.scale);
     this.root.scale.set(cam.scale);
+    const artVersion = terrainArtVersion();
+    if (artVersion !== this.lastTerrainArtVersion) {
+      this.drawTerrain(world);
+      this.lastTerrainArtVersion = artVersion;
+    }
     const territoryKey = this.territoryKey(world);
     if (this.lastTerritoryKey !== territoryKey) {
       this.drawTerritory(world);
@@ -264,6 +314,8 @@ export class PixiMap {
       }
     }
 
+    this.paintTerrainBrushes(ctx, world, regions, pxPerTile);
+
     ctx.globalCompositeOperation = 'soft-light';
     for (let i = 0; i < 2400; i++) {
       const n = tileRand(i, world.seed, 200);
@@ -278,6 +330,99 @@ export class PixiMap {
     ctx.globalCompositeOperation = 'source-over';
 
     return Texture.from(canvas);
+  }
+
+  private paintTerrainBrushes(
+    ctx: CanvasRenderingContext2D,
+    world: WorldState,
+    regions: TerrainRegion[],
+    pxPerTile: number,
+  ): void {
+    if (!isTerrainArtReady()) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+
+    for (const region of regions) {
+      if (region.tiles.length < 2) continue;
+      const brush = TERRAIN_BRUSH[region.terrain];
+      const density = terrainBrushDensity(region.terrain);
+      const count = Math.min(
+        region.terrain === 'forest' ? 160 : 96,
+        Math.max(1, Math.ceil(region.tiles.length * density)),
+      );
+      const baseTiles = terrainBrushSize(region.terrain);
+      for (let k = 0; k < count; k++) {
+        const salt = region.tiles[0] + k * 131 + world.seed * 7;
+        const tile = region.tiles[(tileRand(salt, world.seed, 1501) * region.tiles.length) | 0] ?? region.tiles[0];
+        const x = tile % world.width;
+        const y = (tile / world.width) | 0;
+        const jitterX = tileRand(tile, world.seed, 1502 + k) - 0.5;
+        const jitterY = tileRand(tile, world.seed, 1503 + k) - 0.5;
+        const cx = (x + 0.5 + jitterX * 0.72) * pxPerTile;
+        const cy = (y + 0.5 + jitterY * 0.72) * pxPerTile;
+        const scaleJitter = 0.84 + tileRand(tile, world.seed, 1504 + k) * 0.58;
+        const wide = region.terrain === 'river' ? 1.35 : region.terrain === 'lake' ? 1.18 : 1;
+        const tall = region.terrain === 'mountain' || region.terrain === 'snow' ? 1.16 : 1;
+        drawTerrainBrush(ctx, brush, cx, cy, baseTiles * pxPerTile * scaleJitter * wide, baseTiles * pxPerTile * scaleJitter * tall, {
+          alpha: terrainBrushAlpha(region.terrain) * (0.82 + tileRand(tile, world.seed, 1505 + k) * 0.25),
+          rotation: (tileRand(tile, world.seed, 1506 + k) - 0.5) * (region.terrain === 'river' ? 0.55 : 0.32),
+          flip: tileRand(tile, world.seed, 1507 + k) > 0.5,
+        });
+      }
+
+      if (region.tiles.length >= 10 && (region.terrain === 'forest' || region.terrain === 'mountain' || region.terrain === 'lake' || region.terrain === 'snow')) {
+        this.paintHeroTerrainBrush(ctx, world, region, brush, pxPerTile);
+      }
+    }
+
+    this.paintCoastBrushes(ctx, world, pxPerTile);
+    ctx.restore();
+  }
+
+  private paintHeroTerrainBrush(
+    ctx: CanvasRenderingContext2D,
+    world: WorldState,
+    region: TerrainRegion,
+    brush: TerrainBrushId,
+    pxPerTile: number,
+  ): void {
+    const w = region.maxX - region.minX + 1;
+    const h = region.maxY - region.minY + 1;
+    const anchor = region.tiles[0];
+    const cx = (region.minX + w * (0.45 + tileRand(anchor, world.seed, 1601) * 0.16)) * pxPerTile;
+    const cy = (region.minY + h * (0.45 + tileRand(anchor, world.seed, 1602) * 0.16)) * pxPerTile;
+    const maxTiles = Math.max(2.2, Math.sqrt(region.tiles.length) * 1.18);
+    const width = Math.min(Math.max(w + 0.8, maxTiles), w + 3.2) * pxPerTile;
+    const height = Math.min(Math.max(h + 0.8, maxTiles * 0.82), h + 2.4) * pxPerTile;
+    drawTerrainBrush(ctx, brush, cx, cy, width, height, {
+      alpha: terrainBrushAlpha(region.terrain) * 0.30,
+      rotation: (tileRand(anchor, world.seed, 1603) - 0.5) * 0.18,
+      flip: tileRand(anchor, world.seed, 1604) > 0.5,
+    });
+  }
+
+  private paintCoastBrushes(ctx: CanvasRenderingContext2D, world: WorldState, pxPerTile: number): void {
+    for (let i = 0; i < world.tiles.length; i++) {
+      const x = i % world.width;
+      const y = (i / world.width) | 0;
+      const terrain = world.tiles[i].terrain;
+      if (isWater(terrain)) continue;
+      const neighbors = [
+        x > 0 ? i - 1 : -1,
+        x < world.width - 1 ? i + 1 : -1,
+        y > 0 ? i - world.width : -1,
+        y < world.height - 1 ? i + world.width : -1,
+      ];
+      if (!neighbors.some((n) => n >= 0 && isWater(world.tiles[n].terrain))) continue;
+      if (tileRand(i, world.seed, 1711) < 0.38) continue;
+      const cx = (x + 0.5 + (tileRand(i, world.seed, 1712) - 0.5) * 0.28) * pxPerTile;
+      const cy = (y + 0.5 + (tileRand(i, world.seed, 1713) - 0.5) * 0.28) * pxPerTile;
+      drawTerrainBrush(ctx, 'coast', cx, cy, pxPerTile * (1.8 + tileRand(i, world.seed, 1714) * 0.65), pxPerTile * 1.08, {
+        alpha: 0.30,
+        rotation: tileRand(i, world.seed, 1715) * Math.PI,
+        flip: tileRand(i, world.seed, 1716) > 0.5,
+      });
+    }
   }
 
   private paintTerrainField(

@@ -2,6 +2,7 @@ import type { WorldState } from '../sim/types';
 import { TERRAIN } from '../data/terrain';
 import { RESOURCE } from '../data/resources';
 import { SPECIES } from '../data/species';
+import { drawArtSprite, FX_SPRITES, isGameArtReady, RESOURCE_SPRITES, SPECIES_SPRITES, type SpriteId } from './gameArt';
 import { Camera } from './camera';
 
 export type FxKind = 'war' | 'celebrate' | 'build' | 'good' | 'epic' | 'fall' | 'select';
@@ -437,20 +438,22 @@ export class Renderer {
     const ctx = this.ctx, cam = this.cam, s = cam.scale;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-    // 资源 emoji（与可爱基调一致；缩放足够大时显示）
-    if (s >= 14) {
-      ctx.font = `${Math.round(s * 0.8)}px serif`;
+    // 资源：优先使用绘制好的透明贴图，未加载时保留 emoji fallback。
+    if (s >= 16) {
+      if (!isGameArtReady()) ctx.font = `${Math.round(s * 0.8)}px serif`;
       for (let i = 0; i < world.tiles.length; i++) {
         const res = world.tiles[i].resource;
         if (!res || world.tiles[i].city > 0) continue;
         const x = i % world.width, y = (i / world.width) | 0;
         const [sx, sy] = cam.worldToScreen(x + 0.5, y + 0.5);
         if (sx < 0 || sy < 0 || sx > cam.vw || sy > cam.vh) continue;
-        ctx.fillText(RESOURCE[res].emoji, sx, sy);
+        if (!drawArtSprite(ctx, RESOURCE_SPRITES[res], sx, sy, s * 1.12, s * 1.06, { alpha: 0.94, shadow: true })) {
+          ctx.fillText(RESOURCE[res].emoji, sx, sy);
+        }
       }
     }
 
-    // 城市：画出建筑剪影（不用 emoji，跨平台一致 + 更像箱庭地图筹码）
+    // 城市：优先使用 atlas 中的手绘建筑，缩小时回落到矢量剪影。
     for (let i = 0; i < world.tiles.length; i++) {
       const lvl = world.tiles[i].city;
       if (lvl <= 0) continue;
@@ -464,12 +467,20 @@ export class Renderer {
 
       if (s >= 10) {
         const size = s * (isCap ? 1.25 : lvl >= 2 ? 0.95 : 0.78);
-        if (isCap) {
+        const sprite = settlementSprite(isCap, lvl);
+        const artW = size * (isCap ? 2.18 : lvl >= 2 ? 1.86 : 1.58);
+        const artH = size * (isCap ? 1.82 : lvl >= 2 ? 1.56 : 1.36);
+        drawNationBrush(ctx, sx, sy + size * 0.50, artW * 0.74, size * 0.34, color, 0.30);
+        const drewArt = drawArtSprite(ctx, sprite, sx, sy + size * 0.02, artW, artH, { shadow: true });
+        if (drewArt) {
+          drawTinyPennant(ctx, sx + artW * 0.28, sy - artH * 0.36, Math.max(5, size * 0.22), color);
+          if (isCap && s >= 13) drawTinyCrest(ctx, sx - artW * 0.28, sy - artH * 0.34, Math.max(7, size * 0.25), color);
+        } else if (isCap) {
           drawCastle(ctx, sx, sy, size, color);
           if (s >= 13) drawCapitalSeal(ctx, sx, sy - size * 0.72, Math.max(7, size * 0.26), SPECIES[world.nations[owner].species].emoji);
         }
         else if (lvl >= 2) drawCityCluster(ctx, sx, sy, size, color);
-        else               drawCottage(ctx, sx, sy, size, color);
+        else drawCottage(ctx, sx, sy, size, color);
         // 围攻进度环：被围之城外缘画一段渐增的蜡红弧
         const siege = world.sieges[i];
         if (siege && siege > 0) {
@@ -478,7 +489,10 @@ export class Renderer {
         }
       } else {
         const size = Math.max(5, s * (isCap ? 0.82 : lvl >= 2 ? 0.66 : 0.52));
-        drawMiniSettlement(ctx, sx, sy, size, color, isCap, lvl);
+        drawNationBrush(ctx, sx, sy + size * 0.28, size * 1.1, size * 0.36, color, 0.28);
+        if (!drawArtSprite(ctx, settlementSprite(isCap, lvl), sx, sy, size * 1.65, size * 1.40, { alpha: 0.98, shadow: true })) {
+          drawMiniSettlement(ctx, sx, sy, size, color, isCap, lvl);
+        }
       }
     }
   }
@@ -505,14 +519,26 @@ export class Renderer {
       const r = Math.max(5, s * 0.42) * (a.size > 150 ? 1.25 : a.size > 60 ? 1.0 : 0.85);
       const low = a.supply < 30;
 
-      drawWarBanner(ctx, sx, sy, r, n.color, low);
+      const marching = a.prevTile !== a.tile;
+      const bob = marching ? Math.sin(now / 150 + a.seq) * r * 0.16 : Math.sin(now / 520 + a.seq) * r * 0.04;
+      const fromX = a.prevTile % world.width;
+      const toX = a.tile % world.width;
+      const flip = marching ? toX < fromX : (a.seq & 1) === 0;
 
-      if (s >= 9) {
-        ctx.font = `${Math.round(r * 1.4)}px serif`;
-        ctx.fillText(SPECIES[n.species].emoji, sx, sy - r * 0.08);
-        if (low && s >= 11) {
-          // 缺粮标记：盾右上挂一颗蜡红水印
-          drawSupplyMark(ctx, sx + r * 0.85, sy - r * 0.75, Math.max(5, r * 0.38));
+      drawNationBrush(ctx, sx, sy + r * 0.92, r * 1.42, r * 0.36, n.color, low ? 0.18 : 0.30);
+      const drewArt = drawArtSprite(ctx, SPECIES_SPRITES[n.species], sx, sy - r * 0.28 + bob, r * 2.64, r * 3.28, { shadow: true, flip });
+      if (drewArt) {
+        drawTinyPennant(ctx, sx + r * 0.72, sy - r * 1.32 + bob, Math.max(4.8, r * 0.32), n.color);
+        if (low && s >= 9) drawSupplyMark(ctx, sx + r * 0.98, sy - r * 1.05 + bob, Math.max(5, r * 0.38));
+      } else {
+        drawWarBanner(ctx, sx, sy, r, n.color, low);
+        if (s >= 9) {
+          ctx.font = `${Math.round(r * 1.4)}px serif`;
+          ctx.fillText(SPECIES[n.species].emoji, sx, sy - r * 0.08);
+          if (low && s >= 11) {
+            // 缺粮标记：盾右上挂一颗蜡红水印
+            drawSupplyMark(ctx, sx + r * 0.85, sy - r * 0.75, Math.max(5, r * 0.38));
+          }
         }
       }
     }
@@ -637,10 +663,16 @@ export class Renderer {
       if (cam.scale >= 7) {
         const pop = t < 0.2 ? t / 0.2 : 1;
         const fz = cam.scale * (0.7 + pop * 0.7);
-        ctx.font = `${Math.round(fz)}px serif`;
-        ctx.globalAlpha = 1 - t;
-        ctx.fillText(cfg.emoji, sx, sy - r * 0.5);
-        ctx.globalAlpha = 1;
+        const sprite = FX_SPRITES[f.kind];
+        const drewArt = sprite
+          ? drawArtSprite(ctx, sprite, sx, sy - r * 0.5, fz * 1.35, fz * 1.35, { alpha: 1 - t, shadow: true })
+          : false;
+        if (!drewArt) {
+          ctx.font = `${Math.round(fz)}px serif`;
+          ctx.globalAlpha = 1 - t;
+          ctx.fillText(cfg.emoji, sx, sy - r * 0.5);
+          ctx.globalAlpha = 1;
+        }
       }
     }
   }
@@ -705,6 +737,86 @@ function tileRand(i: number, seed: number, salt: number): number {
 const INK_OUTLINE = '#fff8e6';   // cream outline — matches paper-0
 const INK_DEEP    = '#3a2a1c';   // deep walnut — for ink details
 const GOLD        = '#caa055';
+
+function settlementSprite(isCap: boolean, lvl: number): SpriteId {
+  if (isCap) return 'settlement-capital';
+  return lvl >= 2 ? 'settlement-village' : 'settlement-cottage';
+}
+
+function drawNationBrush(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  w: number,
+  h: number,
+  color: string,
+  alpha: number,
+): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(sx - w * 0.50, sy - h * 0.08);
+  ctx.quadraticCurveTo(sx - w * 0.22, sy - h * 0.44, sx + w * 0.08, sy - h * 0.28);
+  ctx.quadraticCurveTo(sx + w * 0.44, sy - h * 0.10, sx + w * 0.52, sy + h * 0.12);
+  ctx.quadraticCurveTo(sx + w * 0.22, sy + h * 0.42, sx - w * 0.12, sy + h * 0.30);
+  ctx.quadraticCurveTo(sx - w * 0.46, sy + h * 0.20, sx - w * 0.50, sy - h * 0.08);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.55;
+  ctx.strokeStyle = INK_OUTLINE;
+  ctx.lineWidth = Math.max(0.7, h * 0.18);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTinyPennant(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number, color: string): void {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK_DEEP;
+  ctx.lineWidth = Math.max(0.8, size * 0.12);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy + size * 0.56);
+  ctx.lineTo(sx, sy - size * 0.58);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = INK_OUTLINE;
+  ctx.lineWidth = Math.max(0.7, size * 0.10);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - size * 0.55);
+  ctx.lineTo(sx + size * 0.72, sy - size * 0.34);
+  ctx.lineTo(sx + size * 0.24, sy - size * 0.06);
+  ctx.lineTo(sx + size * 0.64, sy + size * 0.22);
+  ctx.lineTo(sx, sy + size * 0.08);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTinyCrest(ctx: CanvasRenderingContext2D, sx: number, sy: number, r: number, color: string): void {
+  ctx.save();
+  ctx.fillStyle = 'rgba(251, 243, 220, 0.92)';
+  ctx.strokeStyle = shade(color, 0.72);
+  ctx.lineWidth = Math.max(1, r * 0.16);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - r);
+  ctx.lineTo(sx + r * 0.82, sy);
+  ctx.lineTo(sx, sy + r);
+  ctx.lineTo(sx - r * 0.82, sy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - r * 0.48);
+  ctx.lineTo(sx + r * 0.38, sy);
+  ctx.lineTo(sx, sy + r * 0.48);
+  ctx.lineTo(sx - r * 0.38, sy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
 
 function drawTreeTuft(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number, tint: number): void {
   const r = size * (0.11 + tint * 0.04);
